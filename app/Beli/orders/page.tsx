@@ -8,7 +8,14 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { formatRupiah } from "@/lib/format";
 
-type OrderStatus = "menunggu" | "confirmed" | "selesai" | "dibatalkan";
+type OrderStatus =
+  | "menunggu_pembayaran"
+  | "menunggu"
+  | "confirmed"
+  | "selesai"
+  | "dibatalkan";
+
+type PaymentStatus = "pending" | "paid" | "failed";
 
 type Order = {
   id: string;
@@ -21,6 +28,7 @@ type Order = {
   totalPrice: number;
   pickupCode: string;
   status: OrderStatus;
+  paymentStatus?: PaymentStatus;
   createdAt?: any;
   confirmedAt?: any;
   completedAt?: any;
@@ -32,7 +40,8 @@ type FilterValue = typeof SEMUA | OrderStatus;
 
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: SEMUA, label: "Semua" },
-  { value: "menunggu", label: " Menunggu" },
+  { value: "menunggu_pembayaran", label: "Menunggu Pembayaran" },
+  { value: "menunggu", label: "Menunggu" },
   { value: "confirmed", label: "Dikonfirmasi" },
   { value: "selesai", label: "Selesai" },
   { value: "dibatalkan", label: "Dibatalkan" },
@@ -40,6 +49,8 @@ const FILTERS: { value: FilterValue; label: string }[] = [
 
 function statusBadgeColor(status: OrderStatus) {
   switch (status) {
+    case "menunggu_pembayaran":
+      return "bg-turmeric-light text-turmeric-dark";
     case "menunggu":
       return "bg-clay-light text-clay";
     case "confirmed":
@@ -55,6 +66,8 @@ function statusBadgeColor(status: OrderStatus) {
 
 function statusLabel(status: OrderStatus) {
   switch (status) {
+    case "menunggu_pembayaran":
+      return "💳 Menunggu Pembayaran";
     case "menunggu":
       return "⏳ Menunggu Konfirmasi";
     case "confirmed":
@@ -70,6 +83,8 @@ function statusLabel(status: OrderStatus) {
 
 function statusDescription(status: OrderStatus) {
   switch (status) {
+    case "menunggu_pembayaran":
+      return "Selesaikan pembayaran untuk melanjutkan pesanan ini.";
     case "menunggu":
       return "Pesanan kamu sedang menunggu konfirmasi dari mitra. Pantau terus notifikasi ya!";
     case "confirmed":
@@ -83,6 +98,30 @@ function statusDescription(status: OrderStatus) {
   }
 }
 
+function paymentBadgeColor(paymentStatus: PaymentStatus) {
+  switch (paymentStatus) {
+    case "paid":
+      return "bg-forest-light text-forest-dark";
+    case "failed":
+      return "bg-clay-light text-clay";
+    case "pending":
+    default:
+      return "bg-line text-ink/50";
+  }
+}
+
+function paymentLabel(paymentStatus: PaymentStatus) {
+  switch (paymentStatus) {
+    case "paid":
+      return "💰 Sudah Bayar";
+    case "failed":
+      return "⚠️ Gagal Bayar";
+    case "pending":
+    default:
+      return "⏱️ Belum Bayar";
+  }
+}
+
 export default function OrdersPage() {
   const router = useRouter();
 
@@ -92,7 +131,6 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // ── Filter status ────────────────────────────────────────────
   const [activeFilter, setActiveFilter] = useState<FilterValue>(SEMUA);
 
   // Cek siapa yang sedang login
@@ -108,7 +146,7 @@ export default function OrdersPage() {
     return () => unsub();
   }, [router]);
 
-  // Ambil pesanan milik user yang sedang login
+  // Ambil pesanan milik user yang sedang login, realtime
   useEffect(() => {
     if (checkingAuth || !uid) return;
 
@@ -117,16 +155,25 @@ export default function OrdersPage() {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const data = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        } as Order));
+        const data = snap.docs.map(
+          (d) =>
+            ({
+              id: d.id,
+              ...(d.data() as any),
+            } as Order)
+        );
 
-        // Sort: status terbaru dulu (menunggu > confirmed > selesai > dibatalkan)
-        const statusOrder = { menunggu: 0, confirmed: 1, selesai: 2, dibatalkan: 3 };
+        // Sort: status terbaru dulu (menunggu_pembayaran > menunggu > confirmed > selesai > dibatalkan)
+        const statusOrder: Record<OrderStatus, number> = {
+          menunggu_pembayaran: 0,
+          menunggu: 1,
+          confirmed: 2,
+          selesai: 3,
+          dibatalkan: 4,
+        };
         data.sort((a, b) => {
-          const aOrder = statusOrder[a.status as OrderStatus] ?? 4;
-          const bOrder = statusOrder[b.status as OrderStatus] ?? 4;
+          const aOrder = statusOrder[a.status] ?? 5;
+          const bOrder = statusOrder[b.status] ?? 5;
           if (aOrder !== bOrder) return aOrder - bOrder;
 
           const aTime = a.createdAt?.toMillis?.() ?? 0;
@@ -174,7 +221,9 @@ export default function OrdersPage() {
         </button>
 
         <div className="mb-6">
-          <h1 className="font-display text-2xl font-semibold text-ink">Pesanan Kamu</h1>
+          <h1 className="font-display text-2xl font-semibold text-ink">
+            Pesanan Kamu
+          </h1>
           <p className="text-sm text-ink/60 mt-1">
             Pantau status semua pesanan yang sudah kamu lakukan
           </p>
@@ -184,7 +233,8 @@ export default function OrdersPage() {
           <div className="bg-clay-light border border-clay rounded-card p-4 mb-6">
             <p className="text-sm text-clay">{error}</p>
 
-            <a href="/discover"
+            <a
+              href="/discover"
               className="inline-block mt-3 text-sm font-semibold text-clay hover:underline"
             >
               ← Kembali ke Discover
@@ -229,7 +279,8 @@ export default function OrdersPage() {
               Belum ada pesanan dengan akun ini.
             </p>
 
-            <a  href="/discover"
+            <a
+              href="/discover"
               className="inline-block rounded-full bg-forest text-white font-semibold px-6 py-2.5 text-sm hover:bg-forest-dark transition-colors"
             >
               Cari makanan sekarang
@@ -249,22 +300,38 @@ export default function OrdersPage() {
                 className="bg-white rounded-card border border-line overflow-hidden"
               >
                 <div className="bg-gradient-to-r from-forest-light to-forest-light/50 px-6 py-4">
-                  <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                     <div className="min-w-0">
                       <h3 className="font-display text-lg font-semibold text-ink">
                         {order.listingTitle}
                       </h3>
                       <p className="text-sm text-ink/60 mt-0.5">
-                        Kode: <span className="font-mono font-semibold">{order.pickupCode}</span>
+                        Kode:{" "}
+                        <span className="font-mono font-semibold">
+                          {order.pickupCode}
+                        </span>
                       </p>
                     </div>
-                    <span
-                      className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${statusBadgeColor(
-                        order.status
-                      )}`}
-                    >
-                      {statusLabel(order.status)}
-                    </span>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span
+                        className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${statusBadgeColor(
+                          order.status
+                        )}`}
+                      >
+                        {statusLabel(order.status)}
+                      </span>
+
+                      {order.paymentStatus && (
+                        <span
+                          className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${paymentBadgeColor(
+                            order.paymentStatus
+                          )}`}
+                        >
+                          {paymentLabel(order.paymentStatus)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -296,14 +363,17 @@ export default function OrdersPage() {
                       <span className="text-xs text-ink/60">
                         Pesanan dibuat:{" "}
                         <span className="font-semibold text-ink">
-                          {order.createdAt?.toDate?.()?.toLocaleDateString("id-ID", {
-                            weekday: "short",
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {order.createdAt?.toDate?.()?.toLocaleDateString(
+                            "id-ID",
+                            {
+                              weekday: "short",
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
                         </span>
                       </span>
                     </div>
@@ -314,14 +384,17 @@ export default function OrdersPage() {
                         <span className="text-xs text-ink/60">
                           Dikonfirmasi oleh mitra:{" "}
                           <span className="font-semibold text-ink">
-                            {order.confirmedAt?.toDate?.()?.toLocaleDateString("id-ID", {
-                              weekday: "short",
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {order.confirmedAt?.toDate?.()?.toLocaleDateString(
+                              "id-ID",
+                              {
+                                weekday: "short",
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
                           </span>
                         </span>
                       </div>
@@ -333,14 +406,17 @@ export default function OrdersPage() {
                         <span className="text-xs text-ink/60">
                           Selesai diambil:{" "}
                           <span className="font-semibold text-ink">
-                            {order.completedAt?.toDate?.()?.toLocaleDateString("id-ID", {
-                              weekday: "short",
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {order.completedAt?.toDate?.()?.toLocaleDateString(
+                              "id-ID",
+                              {
+                                weekday: "short",
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
                           </span>
                         </span>
                       </div>
@@ -352,14 +428,17 @@ export default function OrdersPage() {
                         <span className="text-xs text-ink/60">
                           Dibatalkan:{" "}
                           <span className="font-semibold text-clay">
-                            {order.cancelledAt?.toDate?.()?.toLocaleDateString("id-ID", {
-                              weekday: "short",
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {order.cancelledAt?.toDate?.()?.toLocaleDateString(
+                              "id-ID",
+                              {
+                                weekday: "short",
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
                           </span>
                         </span>
                       </div>
@@ -368,10 +447,16 @@ export default function OrdersPage() {
 
                   <div className="mt-4 pt-4 border-t border-line">
                     <p className="text-xs text-ink/50">
-                      Nama: <span className="font-semibold text-ink">{order.customerName}</span>
+                      Nama:{" "}
+                      <span className="font-semibold text-ink">
+                        {order.customerName}
+                      </span>
                     </p>
                     <p className="text-xs text-ink/50 mt-1">
-                      HP: <span className="font-semibold text-ink">{order.customerPhone}</span>
+                      HP:{" "}
+                      <span className="font-semibold text-ink">
+                        {order.customerPhone}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -382,7 +467,8 @@ export default function OrdersPage() {
                       ⚠️ Jangan lupa ambil pesanan dengan kode di atas!
                     </p>
 
-                    <a href="/discover"
+                    <a
+                      href="/discover"
                       className="inline-block text-xs font-semibold text-forest hover:underline"
                     >
                       ← Kembali cari makanan lain
