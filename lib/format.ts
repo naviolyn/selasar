@@ -1,7 +1,19 @@
 import { Timestamp } from "firebase/firestore";
 
-export function getMinutesRemaining(deadline: Timestamp): number {
-  const diffMs = deadline.toDate().getTime() - Date.now();
+export function getMinutesRemaining(deadline?: Timestamp | null | Date | string): number {
+  if (!deadline) return 0;
+
+  // Jika memiliki metode toDate (kemungkinan Timestamp dari Firestore)
+  const date =
+    typeof (deadline as any)?.toDate === "function"
+      ? (deadline as any).toDate()
+      : deadline instanceof Date
+      ? deadline
+      : new Date(deadline as any);
+
+  if (isNaN(date.getTime())) return 0;
+
+  const diffMs = date.getTime() - Date.now();
   return Math.max(0, Math.round(diffMs / 60000));
 }
 

@@ -61,6 +61,7 @@ export default function UploadListingPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [mitraName, setMitraName] = useState("");
   const [mitraId, setMitraId] = useState("");
+  const [authError, setAuthError] = useState("");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -68,15 +69,24 @@ export default function UploadListingPage() {
         router.replace("/login");
         return;
       }
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      const data = userDoc.exists() ? userDoc.data() : null;
-      if (!data || data.role !== "mitra") {
-        router.replace("/discover");
-        return;
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const data = userDoc.exists() ? userDoc.data() : null;
+
+        if (!data || data.role !== "mitra") {
+          // Bukan mitra → tendang ke /discover
+          router.replace("/discover");
+          return;
+        }
+
+        setMitraId(user.uid);
+        setMitraName(data.name ?? "");
+      } catch (err) {
+        console.error("Gagal memuat data akun:", err);
+        setAuthError("Gagal memuat data akun. Coba refresh halaman.");
+      } finally {
+        setCheckingAuth(false);
       }
-      setMitraId(user.uid);
-      setMitraName(data.name ?? "");
-      setCheckingAuth(false);
     });
     return () => unsub();
   }, [router]);
@@ -186,10 +196,18 @@ export default function UploadListingPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  if (checkingAuth) {
+    if (checkingAuth) {
     return (
       <main className="min-h-screen bg-cream flex items-center justify-center">
         <p className="text-sm text-ink/50">Memeriksa akun...</p>
+      </main>
+    );
+  }
+
+  if (authError) {
+    return (
+      <main className="min-h-screen bg-cream flex items-center justify-center">
+        <p className="text-sm text-clay">{authError}</p>
       </main>
     );
   }
