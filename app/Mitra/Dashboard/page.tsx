@@ -11,10 +11,12 @@ import {
   orderBy,
   query,
   updateDoc,
+  deleteDoc,
   where,
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 type Listing = {
   id: string;
@@ -57,6 +59,10 @@ export default function MitraDashboardPage() {
   const [actionError, setActionError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // State untuk popup konfirmasi hapus listing
+  const [deleteTarget, setDeleteTarget] = useState<Listing | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Guard: hanya mitra yang login boleh akses
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -84,9 +90,8 @@ export default function MitraDashboardPage() {
   }, [router]);
 
   // Realtime: listing milik mitra ini
-    useEffect(() => {
+  useEffect(() => {
     if (!mitraId) return;
-    console.log("Query listing untuk mitraId:", mitraId); // ← tambahan
     const q = query(
       collection(db, "listings"),
       where("mitraId", "==", mitraId),
@@ -95,19 +100,18 @@ export default function MitraDashboardPage() {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        console.log("Jumlah listing ditemukan:", snap.docs.length); // ← tambahan
         setListings(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
         setLoadingData(false);
       },
       (err) => {
-        console.error("Gagal memuat listing:", err); // ← ini yang paling penting dilihat
+        console.error("Gagal memuat listing:", err);
         setLoadingData(false);
       }
     );
     return () => unsub();
   }, [mitraId]);
 
-    // Realtime: klaim yang menunggu konfirmasi, berdasarkan listing milik mitra ini
+  // Realtime: klaim yang menunggu konfirmasi, berdasarkan listing milik mitra ini
   useEffect(() => {
     if (listings.length === 0) {
       setClaims([]);
@@ -121,7 +125,8 @@ export default function MitraDashboardPage() {
     );
     const unsub = onSnapshot(
       q,
-      (snap) => setClaims(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))),
+      (snap) =>
+        setClaims(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))),
       (err) => console.error("Gagal memuat klaim:", err)
     );
     return () => unsub();
@@ -157,6 +162,20 @@ export default function MitraDashboardPage() {
     }
   }
 
+  async function handleConfirmDeleteListing() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setActionError("");
+    try {
+      await deleteDoc(doc(db, "listings", deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      setActionError(err?.message || "Gagal menghapus listing.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function handleLogout() {
     await signOut(auth);
     router.replace("/login");
@@ -186,10 +205,19 @@ export default function MitraDashboardPage() {
       <header className="border-b border-line bg-white/70 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="font-display text-xl font-bold text-forest-dark">
-            SELASAR <span className="text-ink/40 font-normal text-sm">· Mitra</span>
+            SELASAR{" "}
+            <span className="text-ink/40 font-normal text-sm">· Mitra</span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-ink/60 hidden sm:inline">Halo, {mitraName}</span>
+            <a
+              href="/Mitra/Pesanan"
+              className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
+            >
+              Kelola Pesanan
+            </a>
+            <span className="text-sm text-ink/60 hidden sm:inline">
+              Halo, {mitraName}
+            </span>
             <button
               onClick={handleLogout}
               className="text-sm font-medium text-ink/60 hover:text-clay transition-colors"
@@ -204,38 +232,59 @@ export default function MitraDashboardPage() {
         <section className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="bg-white rounded-card border border-line p-5">
             <p className="text-xs text-ink/50">Listing Aktif</p>
-            <p className="font-display text-2xl font-semibold text-ink mt-1">{activeListings.length}</p>
+            <p className="font-display text-2xl font-semibold text-ink mt-1">
+              {activeListings.length}
+            </p>
           </div>
           <div className="bg-white rounded-card border border-line p-5">
             <p className="text-xs text-ink/50">Klaim Menunggu</p>
-            <p className="font-display text-2xl font-semibold text-forest mt-1">{claims.length}</p>
+            <a
+              href="/Mitra/Pesanan"
+              className="block font-display text-2xl font-semibold text-forest mt-1 hover:underline"
+            >
+              {claims.length}
+            </a>
           </div>
           <div className="bg-white rounded-card border border-line p-5 col-span-2 sm:col-span-1">
             <p className="text-xs text-ink/50">Total Kontribusi</p>
-            <p className="font-display text-2xl font-semibold text-ink mt-1">{completedListings.length}</p>
+            <p className="font-display text-2xl font-semibold text-ink mt-1">
+              {completedListings.length}
+            </p>
           </div>
         </section>
 
         <div className="flex items-center justify-between">
-  <h2 className="font-display text-lg font-semibold text-ink">
-    Listing Kamu
-  </h2>
+          <h2 className="font-display text-lg font-semibold text-ink">
+            Listing Kamu
+          </h2>
 
-  <a
-    href="/Mitra/Upload"
-    className="rounded-full bg-forest text-white font-semibold px-5 py-2.5 text-sm hover:bg-forest-dark transition-colors"
-  >
-    + Tambah Listing
-  </a>
-</div>
+          <a
+            href="/Mitra/Upload"
+            className="rounded-full bg-forest text-white font-semibold px-5 py-2.5 text-sm hover:bg-forest-dark transition-colors"
+          >
+            + Tambah Listing
+          </a>
+        </div>
 
         {actionError && (
-          <p className="text-sm text-clay bg-clay-light rounded-lg px-3 py-2">{actionError}</p>
+          <p className="text-sm text-clay bg-clay-light rounded-lg px-3 py-2">
+            {actionError}
+          </p>
         )}
 
         {claims.length > 0 && (
           <section>
-            <h3 className="text-sm font-semibold text-ink/70 mb-3">Klaim menunggu konfirmasi</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-ink/70">
+                Klaim menunggu konfirmasi
+              </h3>
+              <a
+                href="/Mitra/Pesanan"
+                className="text-xs font-semibold text-forest hover:underline"
+              >
+                Lihat semua pesanan →
+              </a>
+            </div>
             <div className="space-y-3">
               {claims.map((c) => (
                 <div
@@ -243,11 +292,15 @@ export default function MitraDashboardPage() {
                   className="bg-white rounded-card border border-forest/30 p-4 flex items-center justify-between gap-4"
                 >
                   <div>
-                    <p className="text-sm font-medium text-ink">{c.listingTitle ?? "Listing"}</p>
+                    <p className="text-sm font-medium text-ink">
+                      {c.listingTitle ?? "Listing"}
+                    </p>
                     <p className="text-xs text-ink/50 mt-0.5">
-  {c.customerName ?? "Pelanggan"} · {c.qty} diambil
-  {c.pickupCode && <span className="ml-1 font-mono">· {c.pickupCode}</span>}
-</p>
+                      {c.customerName ?? "Pelanggan"} · {c.qty} diambil
+                      {c.pickupCode && (
+                        <span className="ml-1 font-mono">· {c.pickupCode}</span>
+                      )}
+                    </p>
                   </div>
                   <button
                     onClick={() => handleConfirmClaim(c.id)}
@@ -266,15 +319,24 @@ export default function MitraDashboardPage() {
           <p className="text-sm text-ink/50">Memuat listing...</p>
         ) : listings.length === 0 ? (
           <div className="bg-white rounded-card border border-dashed border-line p-8 text-center">
-            <p className="text-sm text-ink/50">Belum ada listing. Yuk mulai bantu selamatkan makanan!</p>
+            <p className="text-sm text-ink/50">
+              Belum ada listing. Yuk mulai bantu selamatkan makanan!
+            </p>
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
             {listings.map((l) => (
-              <div key={l.id} className="bg-white rounded-card border border-line overflow-hidden">
+              <div
+                key={l.id}
+                className="bg-white rounded-card border border-line overflow-hidden"
+              >
                 <div className="h-32 bg-forest-light">
                   {l.imageUrl && (
-                    <img src={l.imageUrl} alt={l.title} className="w-full h-full object-cover" />
+                    <img
+                      src={l.imageUrl}
+                      alt={l.title}
+                      className="w-full h-full object-cover"
+                    />
                   )}
                 </div>
                 <div className="p-4">
@@ -282,7 +344,9 @@ export default function MitraDashboardPage() {
                     <p className="text-sm font-semibold text-ink">{l.title}</p>
                     <span
                       className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                        l.status === "active" ? "bg-forest-light text-forest-dark" : "bg-line text-ink/50"
+                        l.status === "active"
+                          ? "bg-forest-light text-forest-dark"
+                          : "bg-line text-ink/50"
                       }`}
                     >
                       {l.status === "active" ? "Aktif" : "Selesai"}
@@ -295,11 +359,26 @@ export default function MitraDashboardPage() {
                     Rp{l.discountPrice.toLocaleString("id-ID")}
                   </p>
 
+                  <div className="mt-3 flex items-center gap-2">
+                    <a
+                      href={`/Mitra/Listing/${l.id}/Edit`}
+                      className="flex-1 text-center rounded-full border border-line text-ink text-xs font-semibold py-2 hover:bg-forest-light transition-colors"
+                    >
+                      Edit
+                    </a>
+                    <button
+                      onClick={() => setDeleteTarget(l)}
+                      className="flex-1 rounded-full border border-clay text-clay text-xs font-semibold py-2 hover:bg-clay-light transition-colors"
+                    >
+                      Hapus
+                    </button>
+                  </div>
+
                   {l.status === "active" && (
                     <button
                       onClick={() => handleMarkCompleted(l.id)}
                       disabled={busyId === l.id}
-                      className="mt-3 w-full rounded-full border border-line text-ink text-xs font-semibold py-2 hover:bg-forest-light transition-colors disabled:opacity-60"
+                      className="mt-2 w-full rounded-full border border-line text-ink text-xs font-semibold py-2 hover:bg-forest-light transition-colors disabled:opacity-60"
                     >
                       {busyId === l.id ? "..." : "Tandai Selesai"}
                     </button>
@@ -310,6 +389,17 @@ export default function MitraDashboardPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={`Hapus "${deleteTarget?.title ?? "listing"}"?`}
+        description="Tindakan ini tidak bisa dibatalkan. Listing akan hilang dari daftar pelanggan."
+        confirmLabel="Ya, Hapus"
+        variant="danger"
+        loading={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDeleteListing}
+      />
     </main>
   );
 }

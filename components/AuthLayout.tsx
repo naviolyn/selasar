@@ -12,7 +12,7 @@ export default function AuthLayout({
   return (
     <div className="min-h-screen w-full flex bg-cream">
       {/* Panel kiri — brand, hanya tampil di layar lebar */}
-      <aside className="hidden lg:flex lg:w-[42%] xl:w-[38%] bg-forest-dark relative overflow-hidden flex-col justify-between p-12">
+      <aside className="hidden lg:flex lg:w-[42%] xl:w-[38%] bg-forest-dark relative overflow-hidden flex-col justify-between p-10 xl:p-12">
         {/* motif tiket sobekan di background, konsisten sama ListingCard */}
         <div
           className="absolute inset-0 opacity-[0.06]"
@@ -22,7 +22,15 @@ export default function AuthLayout({
             backgroundSize: "28px 28px",
           }}
         />
-        <a href="/" className="relative font-display text-2xl font-bold text-white">
+        <div
+          className="absolute -right-24 -bottom-24 w-72 h-72 rounded-full bg-turmeric/10"
+          aria-hidden
+        />
+
+        <a
+          href="/"
+          className="relative font-display text-2xl font-bold text-white"
+        >
           SELASAR
         </a>
 
@@ -41,7 +49,7 @@ export default function AuthLayout({
       </aside>
 
       {/* Panel kanan — form */}
-      <main className="flex-1 flex items-center justify-center px-6 py-12 lg:px-16">
+      <main className="flex-1 flex items-center justify-center px-5 sm:px-6 py-10 sm:py-12 lg:px-16">
         <div className="w-full max-w-md">
           <a
             href="/"
