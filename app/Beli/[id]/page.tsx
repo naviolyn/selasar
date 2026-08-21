@@ -1,28 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import { mockListings } from "@/lib/mock-data";
-import { formatRupiah, formatSisaWaktu } from "@/lib/format";
-
-function generatePickupCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // tanpa 0/O/1/I biar gak ketuker
-  let code = "";
-  for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return `SLS-${code}`;
-}
+import { getListingById, claimListing, Listing } from "@/lib/firestore-listings";
+import { formatRupiah, formatSisaWaktu, getMinutesRemaining } from "@/lib/format";
 
 export default function ClaimPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
-  const listing = useMemo(
-    () => mockListings.find((l) => l.id === params.id),
-    [params.id]
-  );
+  const [listing, setListing] = useState<Listing | null>(null);
+  const [loadingListing, setLoadingListing] = useState(true);
+
+  useEffect(() => {
+    getListingById(params.id).then((data) => {
+      setListing(data);
+      setLoadingListing(false);
+    });
+  }, [params.id]);
 
   const [step, setStep] = useState<"review" | "success">("review");
   const [qty, setQty] = useState(1);
@@ -32,6 +28,17 @@ export default function ClaimPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pickupCode, setPickupCode] = useState("");
+
+  if (loadingListing) {
+    return (
+      <main className="min-h-screen bg-cream">
+        <Navbar />
+        <div className="max-w-md mx-auto px-6 py-24 text-center">
+          <p className="text-sm text-ink/60">Memuat...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!listing) {
     return (
@@ -44,8 +51,8 @@ export default function ClaimPage() {
           <p className="text-sm text-ink/60 mt-2">
             Mungkin sudah habis diklaim orang lain, atau linknya salah.
           </p>
-          <a
-            href="/discover"
+          
+            <a href="/discover"
             className="inline-block mt-6 rounded-full bg-forest text-white font-semibold px-6 py-3 text-sm hover:bg-forest-dark transition-colors"
           >
             Kembali ke daftar makanan
@@ -55,9 +62,10 @@ export default function ClaimPage() {
     );
   }
 
+  const minutesLeft = getMinutesRemaining(listing.pickupDeadline);
   const total = listing.discountPrice * qty;
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -71,12 +79,21 @@ export default function ClaimPage() {
     }
 
     setSubmitting(true);
-    // Simulasi proses klaim — nanti tinggal diganti call ke backend/Firestore.
-    setTimeout(() => {
-      setPickupCode(generatePickupCode());
-      setSubmitting(false);
+    try {
+      const code = await claimListing({
+        listingId: listing!.id,
+        qty,
+        customerName: name,
+        customerPhone: phone,
+        note,
+      });
+      setPickupCode(code);
       setStep("success");
-    }, 600);
+    } catch (err: any) {
+      setError(err.message || "Gagal memproses klaim. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (step === "success") {
@@ -102,7 +119,11 @@ export default function ClaimPage() {
 
             <div className="p-6">
               <div className="flex items-center gap-3">
-                <span className="text-4xl">{listing.imageEmoji}</span>
+                {listing.photoUrl ? (
+                  <img src={listing.photoUrl} alt={listing.title} className="w-14 h-14 rounded-lg object-cover" />
+                ) : (
+                  <span className="text-4xl">🍽️</span>
+                )}
                 <div>
                   <h2 className="font-display text-lg font-semibold text-ink leading-snug">
                     {listing.title}
@@ -127,7 +148,7 @@ export default function ClaimPage() {
                 <div className="flex justify-between text-ink/70">
                   <span>Batas pickup</span>
                   <span className="font-medium text-ink">
-                    {formatSisaWaktu(listing.pickupEndsInMinutes)}
+                    {formatSisaWaktu(minutesLeft)}
                   </span>
                 </div>
               </div>
@@ -139,8 +160,8 @@ export default function ClaimPage() {
               </p>
 
               <div className="mt-6 flex flex-col gap-2">
-                <a
-                  href="/discover"
+                
+                <a href="/discover"
                   className="text-center w-full rounded-full bg-forest text-white font-semibold py-3 text-sm hover:bg-forest-dark transition-colors"
                 >
                   Cari makanan lain
@@ -173,10 +194,14 @@ export default function ClaimPage() {
         </button>
 
         <div className="bg-white rounded-card border border-line shadow-sm shadow-ink/5 overflow-hidden">
-          <div className="relative h-40 bg-forest-light flex items-center justify-center text-6xl">
-            {listing.imageEmoji}
+          <div className="relative h-40 bg-forest-light flex items-center justify-center">
+            {listing.photoUrl ? (
+              <img src={listing.photoUrl} alt={listing.title} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-6xl">🍽️</span>
+            )}
             <span className="absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-semibold bg-clay text-white">
-              {formatSisaWaktu(listing.pickupEndsInMinutes)}
+              {formatSisaWaktu(minutesLeft)}
             </span>
           </div>
 
@@ -192,8 +217,7 @@ export default function ClaimPage() {
             </h1>
             <p className="text-sm text-ink/60 mt-0.5">{listing.mitraName}</p>
             <p className="text-xs text-ink/50 mt-1">
-              {listing.distanceKm} km dari kamu · Sisa {listing.quantityLeft}{" "}
-              {listing.unit}
+              Sisa {listing.quantityLeft} {listing.unit}
             </p>
 
             <div className="mt-4 flex items-baseline gap-2">

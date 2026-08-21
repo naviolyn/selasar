@@ -1,3 +1,10 @@
+import { Timestamp } from "firebase/firestore";
+
+export function getMinutesRemaining(deadline: Timestamp): number {
+  const diffMs = deadline.toDate().getTime() - Date.now();
+  return Math.max(0, Math.round(diffMs / 60000));
+}
+
 export function formatRupiah(value: number): string {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",

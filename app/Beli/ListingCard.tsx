@@ -64,7 +64,7 @@ export default function ListingCard({ listing }: { listing: Listing }) {
         {/* Langsung ke halaman klaim — gak perlu daftar/login dulu.
             Nama & no HP diminta di halaman claim sebagai data pickup. */}
         <a
-          href={`/claim/${listing.id}`}
+          href={`/Beli/${listing.id}`}
           className="mt-4 block text-center w-full rounded-full bg-forest text-white font-semibold py-2.5 text-sm hover:bg-forest-dark transition-colors"
         >
           Selamatkan Sekarang
