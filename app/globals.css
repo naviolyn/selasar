@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-fraunces: "Fraunces", serif;
+  --font-jakarta: "Plus Jakarta Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+body {
+  background-color: #fbf6ec;
+  color: #1f2a1f;
+}
+
+/* Perforated "ticket stub" edge — signature motif dipakai di ListingCard
+   untuk kasih kesan "tiket menyelamatkan makanan", bukan card e-commerce biasa. */
+.ticket-notch {
+  background-image: radial-gradient(
+    circle at center,
+    #fbf6ec 0,
+    #fbf6ec 6px,
+    transparent 6.5px
+  );
+  background-size: 16px 16px;
+  background-repeat: repeat-x;
+  background-position: left center;
+  height: 16px;
+}
+
+.dash-divider {
+  border-top: 2px dashed #ddd3bc;
+}
