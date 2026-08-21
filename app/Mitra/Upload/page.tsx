@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -11,6 +12,17 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import type { LatLng } from "@/components/LocationPicker";
+
+// Peta pakai Leaflet yang bergantung ke `window`, jadi harus di-load tanpa SSR.
+const LocationPicker = dynamic(() => import("@/components/LocationPicker"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[220px] w-full rounded-card border border-line bg-forest-light/40 flex items-center justify-center text-xs text-ink/40">
+      Memuat peta...
+    </div>
+  ),
+});
 
 // ── Konfigurasi Cloudinary ──────────────────────────────────────────
 // Butuh 2 env var di .env.local:
@@ -49,6 +61,22 @@ async function uploadToCloudinary(
   const data = await res.json();
   return { url: data.secure_url as string, publicId: data.public_id as string };
 }
+
+// Reverse geocoding pakai Nominatim (OpenStreetMap) — gratis, tanpa API key.
+// Catatan: ini enak buat skala kecil/menengah. Kalau trafik udah gede,
+// pertimbangkan self-host Nominatim atau pindah ke layanan geocoding berbayar,
+// karena kebijakan pemakaian publik Nominatim membatasi ~1 request/detik.
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=id`
+  );
+  if (!res.ok) throw new Error("Gagal mengambil alamat dari koordinat.");
+  const data = await res.json();
+  return (data?.display_name as string) ?? "";
+}
+
+// Titik tengah default: Medan, buat posisi awal peta sebelum user pakai GPS/klik.
+const DEFAULT_CENTER: LatLng = { lat: 3.5952, lng: 98.6722 };
 
 const categories = ["Makanan Berat", "Roti", "Kue Khas Medan", "Lainnya"];
 const units = ["porsi", "pcs", "box", "loyang", "pack"];
@@ -104,9 +132,57 @@ export default function UploadListingPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
 
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
+  // ── Lokasi ──────────────────────────────────────────────────────
+  const [position, setPosition] = useState<LatLng | null>(null);
+  const [address, setAddress] = useState("");
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
+
+  async function handleUseMyLocation() {
+    setLocationError("");
+    if (!("geolocation" in navigator)) {
+      setLocationError("Browser ini tidak mendukung deteksi lokasi.");
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setPosition(next);
+        try {
+          const found = await reverseGeocode(next.lat, next.lng);
+          if (found) setAddress(found);
+        } catch (err) {
+          console.error(err);
+          // Koordinat tetap kepakai walau reverse geocode gagal; user bisa isi alamat manual.
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        console.error(err);
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationError(
+            "Izin lokasi ditolak. Kamu masih bisa klik langsung di peta buat nentuin titik lokasi."
+          );
+        } else {
+          setLocationError(
+            "Gagal mendeteksi lokasi. Coba lagi atau klik langsung di peta."
+          );
+        }
+        // Tampilkan peta dengan titik default supaya user tetap bisa klik manual.
+        setPosition((p) => p ?? DEFAULT_CENTER);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  function handleMapChange(next: LatLng) {
+    setPosition(next);
+    setLocationError("");
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -125,6 +201,10 @@ export default function UploadListingPage() {
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
   }
+
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -145,6 +225,9 @@ export default function UploadListingPage() {
     if (!qty || qty <= 0)
       return setError("Jumlah tersedia harus lebih dari 0.");
     if (!pickupDeadline) return setError("Tentukan batas waktu pickup.");
+    if (!position) return setError("Tentukan lokasi pickup dulu ya.");
+    if (!address.trim())
+      return setError("Alamat pickup wajib diisi (bisa diedit manual).");
 
     const pickupTime = new Date(pickupDeadline);
     if (pickupTime.getTime() <= Date.now()) {
@@ -167,6 +250,11 @@ export default function UploadListingPage() {
         pickupEndsAt: pickupTime,
         imageUrl,
         imagePublicId,
+        location: {
+          address: address.trim(),
+          lat: position.lat,
+          lng: position.lng,
+        },
         mitraId,
         mitraName,
         status: "active",
@@ -192,11 +280,14 @@ export default function UploadListingPage() {
     setPickupDeadline("");
     setImageFile(null);
     setImagePreview("");
+    setPosition(null);
+    setAddress("");
+    setLocationError("");
     setSuccess(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-    if (checkingAuth) {
+  if (checkingAuth) {
     return (
       <main className="min-h-screen bg-cream flex items-center justify-center">
         <p className="text-sm text-ink/50">Memeriksa akun...</p>
@@ -425,6 +516,47 @@ export default function UploadListingPage() {
                     className="w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest"
                   />
                 </div>
+              </div>
+
+              {/* Lokasi pickup */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-ink">
+                    Lokasi pickup
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseMyLocation}
+                    disabled={locating}
+                    className="text-xs font-semibold text-forest hover:text-forest-dark disabled:opacity-50"
+                  >
+                    {locating
+                      ? "Mendeteksi..."
+                      : "📍 Gunakan lokasi saya sekarang"}
+                  </button>
+                </div>
+
+                <LocationPicker
+                  position={position ?? DEFAULT_CENTER}
+                  onChange={handleMapChange}
+                />
+                <p className="text-xs text-ink/40 mt-1.5">
+                  Klik atau geser pin di peta buat koreksi titik lokasi kalau
+                  kurang pas.
+                </p>
+
+                <input
+                  type="text"
+                  required
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Alamat lengkap (bisa diedit manual)"
+                  className="mt-3 w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest"
+                />
+
+                {locationError && (
+                  <p className="text-xs text-clay mt-1.5">{locationError}</p>
+                )}
               </div>
 
               {error && (
