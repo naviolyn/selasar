@@ -44,8 +44,7 @@ export default function AuthLayout({
         </div>
 
         <p className="relative text-sm text-white/50">
-          Medan Bisa Digital 2026 — Think Medan. Build Digital.
-        </p>
+          Medan Bisa Digital 2026 — Dari Berlebih, Jadi Berarti        </p>
       </aside>
 
       {/* Panel kanan — form */}

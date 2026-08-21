@@ -26,9 +26,9 @@ const steps = [
 export default function WelcomePage() {
   return (
     <main className="bg-cream min-h-screen">
-      {/* Navbar */}
-      <header className="max-w-6xl mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
-        <span className="font-display text-2xl font-bold text-forest-dark">
+      {/* Navbar — style disamakan dengan komponen Navbar shared (sticky, blur, padding) */}
+      <header className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-line px-4 sm:px-6 lg:px-10 py-3.5 sm:py-4 flex items-center justify-between w-full">
+        <span className="font-display text-lg sm:text-xl font-bold text-forest-dark shrink-0">
           SELASAR
         </span>
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-ink/70">
@@ -36,16 +36,16 @@ export default function WelcomePage() {
           <a href="#cara-kerja" className="hover:text-ink">Cara Kerja</a>
           <a href="#mitra" className="hover:text-ink">Untuk Mitra</a>
         </nav>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <a
             href="/login"
-            className="text-sm font-semibold text-ink/70 hover:text-ink px-2"
+            className="text-sm font-semibold text-ink/70 hover:text-ink px-2 py-1.5 transition-colors"
           >
             Masuk
           </a>
           <a
             href="/register"
-            className="text-sm font-semibold text-white bg-forest hover:bg-forest-dark transition-colors rounded-full px-5 py-2.5"
+            className="text-sm font-semibold text-white bg-forest hover:bg-forest-dark transition-colors rounded-full px-4 sm:px-5 py-2 sm:py-2.5"
           >
             Daftar
           </a>
@@ -53,10 +53,10 @@ export default function WelcomePage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 lg:px-10 pt-10 pb-20 grid lg:grid-cols-2 gap-14 items-center">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 pt-10 pb-20 grid lg:grid-cols-2 gap-14 items-center">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-forest-dark/70 mb-4">
-            Medan Bisa Digital 2026
+          <p className="font-mono text-m uppercase tracking-widest text-forest-dark/70 mb-4">
+            Dari Berlebih, Jadi Berarti
           </p>
           <h1 className="font-display text-4xl lg:text-5xl font-semibold text-ink leading-[1.1]">
             Makanan berlebih,
@@ -125,7 +125,7 @@ export default function WelcomePage() {
 
       {/* Cara kerja */}
       <section id="cara-kerja" className="bg-forest-dark py-20">
-        <div className="max-w-6xl mx-auto px-6 lg:px-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10">
           <p className="font-mono text-xs uppercase tracking-widest text-turmeric mb-3">
             Cara Kerja
           </p>
@@ -155,7 +155,7 @@ export default function WelcomePage() {
       </section>
 
       {/* CTA Mitra */}
-      <section id="mitra" className="max-w-6xl mx-auto px-6 lg:px-10 py-20">
+      <section id="mitra" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-20">
         <div className="bg-turmeric-light rounded-[28px] p-10 lg:p-14 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
           <div>
             <h2 className="font-display text-2xl lg:text-3xl font-semibold text-ink max-w-md">
@@ -176,9 +176,9 @@ export default function WelcomePage() {
       </section>
 
       <footer className="border-t border-line">
-        <div className="max-w-6xl mx-auto px-6 lg:px-10 py-8 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-ink/50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-8 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-ink/50">
           <span>SELASAR — Medan Bisa Digital 2026</span>
-          <span>Think Medan. Build Digital.</span>
+          <span>Dari Berlebih, Jadi Berarti</span>
         </div>
       </footer>
     </main>
