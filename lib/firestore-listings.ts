@@ -10,7 +10,7 @@ export type Listing = {
   category: string;
   mitraId: string;
   mitraName: string;
-  photoUrl?: string;
+  imageUrl?: string;
   originalPrice: number;
   discountPrice: number;
   quantityTotal: number;

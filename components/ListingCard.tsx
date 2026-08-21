@@ -14,11 +14,11 @@ export default function ListingCard({ listing }: { listing: Listing }) {
   return (
     <article className="w-full rounded-card bg-white shadow-sm shadow-ink/5 overflow-hidden border border-line/70">
       <div className="relative h-40 bg-forest-light flex items-center justify-center">
-        {listing.photoUrl ? (
-          <img src={listing.photoUrl} alt={listing.title} className="w-full h-full object-cover" />
-        ) : (
-          <span className="text-6xl">🍽️</span>
-        )}
+        {listing.imageUrl ? (
+  <img src={listing.imageUrl} alt={listing.title} className="w-full h-full object-cover" />
+) : (
+  <span className="text-6xl">🍽️</span>
+)}
         <span className={`absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-semibold ${urgencyStyle(minutesLeft)}`}>
           {formatSisaWaktu(minutesLeft)}
         </span>

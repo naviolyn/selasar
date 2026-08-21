@@ -22,7 +22,7 @@ export default function LoginPage() {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const userDoc = await getDoc(doc(db, "users", cred.user.uid));
       const role = userDoc.exists() ? userDoc.data().role : "pelanggan";
-      router.push(role === "mitra" ? "/mitra/dashboard" : "/discover");
+      router.push(role === "mitra" ? "/Mitra/Dashboard" : "/discover");
     } catch (err: any) {
       setError("Email atau password salah. Coba lagi.");
     } finally {

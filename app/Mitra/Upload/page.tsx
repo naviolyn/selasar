@@ -251,7 +251,7 @@ export default function UploadListingPage() {
                 Upload makanan lain
               </button>
               <a
-                href="/mitra/dashboard"
+                href="/Mitra/Dashboard"
                 className="rounded-full border border-line text-ink font-semibold px-6 py-3 text-sm hover:bg-forest-light transition-colors"
               >
                 Ke dashboard
