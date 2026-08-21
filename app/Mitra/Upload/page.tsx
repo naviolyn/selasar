@@ -310,14 +310,14 @@ export default function UploadListingPage() {
       <header className="border-b border-line bg-white/70 backdrop-blur sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-6 py-4 flex items-center justify-between">
           <a
-            href="/mitra/dashboard"
+            href="/Mitra/Dashboard"
             className="font-display text-xl font-bold text-forest-dark"
           >
             SELASAR{" "}
             <span className="text-ink/40 font-normal text-sm">· Mitra</span>
           </a>
           <a
-            href="/mitra/dashboard"
+            href="/Mitra/Dashboard"
             className="text-sm font-medium text-ink/60 hover:text-ink"
           >
             Kembali

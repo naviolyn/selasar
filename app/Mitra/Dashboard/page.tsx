@@ -43,6 +43,9 @@ type Claim = {
   totalPrice?: number;
   pickupCode?: string;
   status: string;
+  paymentStatus: "pending" | "paid" | "expired" | "failed";
+  midtransOrderId: string;
+  expiresAt: any;
 };
 
 export default function MitraDashboardPage() {

@@ -37,6 +37,9 @@ type Claim = {
   pickupCode?: string;
   status: "menunggu" | "confirmed" | "selesai" | "dibatalkan" | string;
   createdAt?: any;
+  paymentStatus: "pending" | "paid" | "expired" | "failed";
+  midtransOrderId: string;
+  expiresAt: any;
 };
 
 type StatusFilter =
