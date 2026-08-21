@@ -10,6 +10,7 @@ import {
   doc,
   getDoc,
   serverTimestamp,
+  Timestamp,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type { LatLng } from "@/components/LocationPicker";
@@ -245,9 +246,10 @@ export default function UploadListingPage() {
         description: description.trim(),
         originalPrice: original,
         discountPrice: discount,
+        quantityTotal: qty,
         quantityLeft: qty,
         unit,
-        pickupEndsAt: pickupTime,
+        pickupDeadline: Timestamp.fromDate(pickupTime),
         imageUrl,
         imagePublicId,
         location: {

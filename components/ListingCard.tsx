@@ -59,6 +59,12 @@ export default function ListingCard({ listing }: { listing: Listing }) {
         <p className="text-sm text-ink/60 mt-0.5 line-clamp-1">
           {listing.mitraName}
         </p>
+        {listing.location?.address && (
+          <p className="text-xs text-ink/45 mt-1 flex items-center gap-1 line-clamp-1">
+            <span className="shrink-0">📍</span>
+            <span className="line-clamp-1">{listing.location.address}</span>
+          </p>
+        )}
 
         <div className="mt-3 flex items-end justify-between gap-2 flex-wrap">
           <div className="flex items-baseline gap-2">
@@ -80,8 +86,8 @@ export default function ListingCard({ listing }: { listing: Listing }) {
           </span>
         </div>
 
-        <a
-          href={isSoldOut ? undefined : `/Beli/${listing.id}`}
+        
+        <a  href={isSoldOut ? undefined : `/Beli/${listing.id}`}
           aria-disabled={isSoldOut}
           className={`mt-4 block text-center w-full rounded-full font-semibold py-2.5 text-sm transition-colors ${
             isSoldOut

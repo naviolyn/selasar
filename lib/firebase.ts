@@ -12,8 +12,7 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// NOTE: minta temanmu isi nilai asli config ini di .env.local
-// (lihat Tutorial-Git-GitHub-SELASAR.md bagian .env.local)
+
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);

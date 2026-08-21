@@ -17,6 +17,11 @@ export type Listing = {
   quantityLeft: number;
   unit: string;
   pickupDeadline: Timestamp;
+  location?: {
+    address: string;
+    lat: number;
+    lng: number;
+  };
 };
 
 export async function getListings(): Promise<Listing[]> {
@@ -47,6 +52,7 @@ function generatePickupCode() {
 
 export async function claimListing(params: {
   listingId: string;
+  customerId: string;
   qty: number;
   customerName: string;
   customerPhone: string;
@@ -70,6 +76,7 @@ export async function claimListing(params: {
     tx.set(claimRef, {
       listingId: params.listingId,
       listingTitle: listing.title,
+      customerId: params.customerId,
       qty: params.qty,
       totalPrice: listing.discountPrice * params.qty,
       customerName: params.customerName,
