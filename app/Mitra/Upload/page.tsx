@@ -79,7 +79,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 // Titik tengah default: Medan, buat posisi awal peta sebelum user pakai GPS/klik.
 const DEFAULT_CENTER: LatLng = { lat: 3.5952, lng: 98.6722 };
 
-const categories = ["Makanan Berat", "Roti", "Kue Khas Medan", "Lainnya"];
+const categories = ["Makanan Berat", "Roti", "Kue Khas Medan", "Sisa Makanan", "Lainnya"];
 const units = ["porsi", "pcs", "box", "loyang", "pack"];
 
 export default function UploadListingPage() {

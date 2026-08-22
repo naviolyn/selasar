@@ -40,6 +40,7 @@ const CATEGORIES = [
   "Buah & Sayur",
   "Bahan Pokok",
   "Minuman",
+  "Sisa Makanan",
   "Lainnya",
 ];
 

@@ -22,9 +22,9 @@ type Listing = {
   status: "active" | "completed" | "expired";
 };
 
-// Catatan: sesuaikan nama field & nilai status di bawah dengan struktur
-// collection "claims" kamu yang sebenarnya.
-// Asumsi status: "menunggu" -> "confirmed" -> "selesai", atau "dibatalkan"
+// Status asli di Firestore, mengikuti alur pembayaran Midtrans:
+// "menunggu_pembayaran" -> (webhook paid) "menunggu" -> (mitra konfirmasi) "confirmed" -> (mitra tandai diambil) "selesai"
+// "kadaluarsa" / "dibatalkan" tetap tersimpan di database tapi tidak ditampilkan sebagai tab terpisah di sini.
 type Claim = {
   id: string;
   listingId: string;
@@ -35,7 +35,14 @@ type Claim = {
   unit?: string;
   totalPrice?: number;
   pickupCode?: string;
-  status: "menunggu" | "confirmed" | "selesai" | "dibatalkan" | string;
+  status:
+    | "menunggu_pembayaran"
+    | "menunggu"
+    | "confirmed"
+    | "selesai"
+    | "dibatalkan"
+    | "kadaluarsa"
+    | string;
   createdAt?: any;
   paymentStatus: "pending" | "paid" | "expired" | "failed";
   midtransOrderId: string;
@@ -44,21 +51,23 @@ type Claim = {
 
 type StatusFilter =
   | "semua"
-  | "menunggu"
-  | "confirmed"
   | "selesai"
-  | "dibatalkan";
+  | "menunggu_pembayaran"
+  | "menunggu"
+  | "confirmed";
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: "semua", label: "Semua" },
-  { key: "menunggu", label: "Menunggu" },
-  { key: "confirmed", label: "Dikonfirmasi" },
   { key: "selesai", label: "Selesai" },
-  { key: "dibatalkan", label: "Dibatalkan" },
+  { key: "menunggu_pembayaran", label: "Menunggu Pembayaran" },
+  { key: "menunggu", label: "Menunggu Konfirmasi" },
+  { key: "confirmed", label: "Dikonfirmasi" },
 ];
 
 function statusBadge(status: string) {
   switch (status) {
+    case "menunggu_pembayaran":
+      return "bg-turmeric/20 text-turmeric";
     case "menunggu":
       return "bg-clay-light text-clay";
     case "confirmed":
@@ -67,6 +76,8 @@ function statusBadge(status: string) {
       return "bg-line text-ink/60";
     case "dibatalkan":
       return "bg-line text-ink/40 line-through";
+    case "kadaluarsa":
+      return "bg-clay-light text-clay/60 line-through";
     default:
       return "bg-line text-ink/50";
   }
@@ -74,14 +85,18 @@ function statusBadge(status: string) {
 
 function statusLabel(status: string) {
   switch (status) {
+    case "menunggu_pembayaran":
+      return "Menunggu Pembayaran";
     case "menunggu":
-      return "Menunggu";
+      return "Menunggu Konfirmasi";
     case "confirmed":
       return "Dikonfirmasi";
     case "selesai":
       return "Selesai";
     case "dibatalkan":
       return "Dibatalkan";
+    case "kadaluarsa":
+      return "Kadaluarsa";
     default:
       return status;
   }
@@ -151,7 +166,11 @@ export default function MitraPesananPage() {
     return () => unsub();
   }, [mitraId]);
 
-  // Realtime: semua klaim untuk listing milik mitra ini (semua status, bukan cuma "menunggu")
+  // Realtime: semua klaim untuk listing milik mitra ini (semua status).
+  // Ini titik masuk data pelanggan ke sisi mitra — begitu customer checkout
+  // dan bayar (lewat API route + webhook Midtrans), dokumen claims baru/updated
+  // otomatis kedeteksi listener ini karena listingId-nya cocok dengan salah satu
+  // listing milik mitra.
   useEffect(() => {
     if (listings.length === 0) {
       setClaims([]);
@@ -232,10 +251,10 @@ export default function MitraPesananPage() {
   const counts = useMemo(() => {
     const c: Record<StatusFilter, number> = {
       semua: claims.length,
+      selesai: 0,
+      menunggu_pembayaran: 0,
       menunggu: 0,
       confirmed: 0,
-      selesai: 0,
-      dibatalkan: 0,
     };
     for (const claim of claims) {
       if (claim.status in c) {
@@ -258,7 +277,7 @@ export default function MitraPesananPage() {
         );
       })
       .sort((a, b) => {
-        // Menunggu di atas, lalu urut dari yang terbaru
+        // Menunggu konfirmasi di atas, lalu urut dari yang terbaru
         if (a.status === "menunggu" && b.status !== "menunggu") return -1;
         if (b.status === "menunggu" && a.status !== "menunggu") return 1;
         const at = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -285,29 +304,31 @@ export default function MitraPesananPage() {
 
   return (
     <main className="min-h-screen bg-cream">
-      <header className="border-b border-line bg-white/70 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-line/70 bg-white/70 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="font-display text-xl font-bold text-forest-dark">
             SELASAR{" "}
             <span className="text-ink/40 font-normal text-sm">· Mitra</span>
           </div>
           <div className="flex items-center gap-4">
-            <a
-              href="/Mitra/Dashboard"
-              className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
-            >
-              Dashboard
-            </a>
-            <span className="text-sm text-ink/60 hidden sm:inline">
-              Halo, {mitraName}
-            </span>
-            <button
-              onClick={handleLogout}
-              className="text-sm font-medium text-ink/60 hover:text-clay transition-colors"
-            >
-              Keluar
-            </button>
-          </div>
+  <a
+    href="/Mitra/Dashboard"
+    className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
+  >
+    Dashboard
+  </a>
+
+  <span className="text-sm text-ink/60 hidden sm:inline">
+    Halo, {mitraName}
+  </span>
+
+  <button
+    onClick={handleLogout}
+    className="text-sm font-medium text-ink/60 hover:text-clay transition-colors"
+  >
+    Keluar
+  </button>
+</div>
         </div>
       </header>
 
@@ -358,7 +379,7 @@ export default function MitraPesananPage() {
         {loadingData ? (
           <p className="text-sm text-ink/50">Memuat pesanan...</p>
         ) : visibleClaims.length === 0 ? (
-          <div className="bg-white rounded-card border border-dashed border-line p-8 text-center">
+          <div className="rounded-card bg-white border border-dashed border-line/70 p-8 text-center">
             <p className="text-sm text-ink/50">
               {claims.length === 0
                 ? "Belum ada pesanan masuk."
@@ -370,11 +391,11 @@ export default function MitraPesananPage() {
             {visibleClaims.map((c) => (
               <div
                 key={c.id}
-                className="bg-white rounded-card border border-line p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                className="rounded-card bg-white shadow-sm shadow-ink/5 border border-line/70 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-ink">
+                    <p className="font-display text-sm font-semibold text-ink">
                       {c.listingTitle ?? "Listing"}
                     </p>
                     <span
@@ -402,6 +423,12 @@ export default function MitraPesananPage() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {c.status === "menunggu_pembayaran" && (
+                    <span className="text-xs text-ink/40 italic">
+                      Menunggu pelanggan bayar...
+                    </span>
+                  )}
+
                   {c.status === "menunggu" && (
                     <>
                       <button
