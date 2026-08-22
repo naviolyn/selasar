@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Fraunces, Plus_Jakarta_Sans, IBM_Plex_Mono } from "next/font/google";
+import {  Plus_Jakarta_Sans, IBM_Plex_Mono, Merriweather } from "next/font/google";
 import "./globals.css";
 
-const fraunces = Fraunces({
+const fraunces = Merriweather({
   subsets: ["latin"],
   variable: "--font-fraunces",
-  weight: ["500", "600", "700"],
+  weight: ["400", "900", "900"],
 });
 
 const jakarta = Plus_Jakarta_Sans({
