@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import Navbar from "@/components/Navbar";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { formatRupiah } from "@/lib/format";
 
@@ -37,6 +45,12 @@ type Order = {
 
 const SEMUA = "Semua";
 type FilterValue = typeof SEMUA | OrderStatus;
+
+// Batas waktu pembayaran: 5 menit sejak order dibuat
+const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Sesuaikan dengan route halaman pembayaran kamu yang sebenarnya
+const PAYMENT_ROUTE = (orderId: string) => `/pay/${orderId}`;
 
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: SEMUA, label: "Semua" },
@@ -84,7 +98,7 @@ function statusLabel(status: OrderStatus) {
 function statusDescription(status: OrderStatus) {
   switch (status) {
     case "menunggu_pembayaran":
-      return "Selesaikan pembayaran untuk melanjutkan pesanan ini.";
+      return "Selesaikan pembayaran untuk melanjutkan pesanan ini. Klik kartu ini untuk membayar sekarang.";
     case "menunggu":
       return "Pesanan kamu sedang menunggu konfirmasi dari mitra. Pantau terus notifikasi ya!";
     case "confirmed":
@@ -92,7 +106,7 @@ function statusDescription(status: OrderStatus) {
     case "selesai":
       return "Pesanan selesai. Terima kasih sudah membantu menyelamatkan makanan! 🎉";
     case "dibatalkan":
-      return "Pesanan ini telah dibatalkan oleh mitra.";
+      return "Pesanan ini telah dibatalkan.";
     default:
       return "";
   }
@@ -120,6 +134,71 @@ function paymentLabel(paymentStatus: PaymentStatus) {
     default:
       return "⏱️ Belum Bayar";
   }
+}
+
+function getRemainingMs(order: Order) {
+  const createdMs = order.createdAt?.toMillis?.() ?? Date.now();
+  const deadline = createdMs + PAYMENT_TIMEOUT_MS;
+  return deadline - Date.now();
+}
+
+function formatCountdown(ms: number) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Menampilkan hitung mundur batas waktu pembayaran.
+ * Memanggil onExpire sekali saat waktu habis (dan order masih pending).
+ */
+function PaymentCountdown({
+  order,
+  onExpire,
+}: {
+  order: Order;
+  onExpire: (order: Order) => void;
+}) {
+  const [remaining, setRemaining] = useState(() => getRemainingMs(order));
+
+  useEffect(() => {
+    // Reset setiap kali order berubah (mis. createdAt baru dari server)
+    setRemaining(getRemainingMs(order));
+
+    if (getRemainingMs(order) <= 0) return;
+
+    const interval = setInterval(() => {
+      setRemaining((prev) => {
+        const next = prev - 1000;
+        if (next <= 0) {
+          clearInterval(interval);
+          onExpire(order);
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.id, order.createdAt]);
+
+  if (order.status !== "menunggu_pembayaran") return null;
+
+  if (remaining <= 0) {
+    return (
+      <span className="text-xs font-semibold text-clay">
+        Waktu pembayaran habis, membatalkan pesanan…
+      </span>
+    );
+  }
+
+  return (
+    <span className="text-xs font-semibold text-turmeric-dark">
+      ⏰ Bayar dalam {formatCountdown(remaining)}
+    </span>
+  );
 }
 
 export default function OrdersPage() {
@@ -208,6 +287,42 @@ export default function OrdersPage() {
     return orders.filter((o) => o.status === activeFilter);
   }, [orders, activeFilter]);
 
+  // Set untuk mencegah pembatalan ganda saat re-render
+  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+
+  const handleExpirePayment = useCallback(
+    async (order: Order) => {
+      // Kalau ternyata sudah dibayar / bukan lagi menunggu_pembayaran, jangan batalkan
+      if (order.paymentStatus === "paid") return;
+      if (order.status !== "menunggu_pembayaran") return;
+      if (cancellingIds.has(order.id)) return;
+
+      setCancellingIds((prev) => new Set(prev).add(order.id));
+
+      try {
+        await updateDoc(doc(db, "claims", order.id), {
+          status: "dibatalkan",
+          cancelledAt: serverTimestamp(),
+          cancelReason: "payment_timeout",
+        });
+      } catch (err) {
+        console.error("Gagal membatalkan pesanan otomatis:", err);
+      } finally {
+        setCancellingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+      }
+    },
+    [cancellingIds]
+  );
+
+  const goToPayment = (order: Order) => {
+    if (order.status !== "menunggu_pembayaran") return;
+    router.push(PAYMENT_ROUTE(order.id));
+  };
+
   return (
     <main className="min-h-screen bg-cream">
       <Navbar />
@@ -294,189 +409,228 @@ export default function OrdersPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredOrders.map((order) => (
-              <div
-                key={order.id}
-                className="bg-white rounded-card border border-line overflow-hidden"
-              >
-                <div className="bg-gradient-to-r from-forest-light to-forest-light/50 px-6 py-4">
-                  <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
-                    <div className="min-w-0">
-                      <h3 className="font-display text-lg font-semibold text-ink">
-                        {order.listingTitle}
-                      </h3>
-                      <p className="text-sm text-ink/60 mt-0.5">
-                        Kode:{" "}
-                        <span className="font-mono font-semibold">
-                          {order.pickupCode}
-                        </span>
-                      </p>
-                    </div>
+            {filteredOrders.map((order) => {
+              const isPendingPayment = order.status === "menunggu_pembayaran";
 
-                    <div className="flex flex-wrap gap-2">
-                      <span
-                        className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${statusBadgeColor(
-                          order.status
-                        )}`}
-                      >
-                        {statusLabel(order.status)}
-                      </span>
+              return (
+                <div
+                  key={order.id}
+                  role={isPendingPayment ? "button" : undefined}
+                  tabIndex={isPendingPayment ? 0 : undefined}
+                  onClick={() => isPendingPayment && goToPayment(order)}
+                  onKeyDown={(e) => {
+                    if (isPendingPayment && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      goToPayment(order);
+                    }
+                  }}
+                  className={`bg-white rounded-card border overflow-hidden transition-colors ${
+                    isPendingPayment
+                      ? "border-turmeric cursor-pointer hover:border-turmeric-dark hover:shadow-sm"
+                      : "border-line"
+                  }`}
+                >
+                  <div className="bg-gradient-to-r from-forest-light to-forest-light/50 px-6 py-4">
+                    <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+                      <div className="min-w-0">
+                        <h3 className="font-display text-lg font-semibold text-ink">
+                          {order.listingTitle}
+                        </h3>
+                        <p className="text-sm text-ink/60 mt-0.5">
+                          Kode:{" "}
+                          <span className="font-mono font-semibold">
+                            {order.pickupCode}
+                          </span>
+                        </p>
+                      </div>
 
-                      {order.paymentStatus && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isPendingPayment && (
+                          <PaymentCountdown
+                            order={order}
+                            onExpire={handleExpirePayment}
+                          />
+                        )}
+
                         <span
-                          className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${paymentBadgeColor(
-                            order.paymentStatus
+                          className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${statusBadgeColor(
+                            order.status
                           )}`}
                         >
-                          {paymentLabel(order.paymentStatus)}
+                          {statusLabel(order.status)}
                         </span>
+
+                        {order.paymentStatus && (
+                          <span
+                            className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${paymentBadgeColor(
+                              order.paymentStatus
+                            )}`}
+                          >
+                            {paymentLabel(order.paymentStatus)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-6 py-4 bg-ink/2">
+                    <p className="text-sm text-ink/70">
+                      {statusDescription(order.status)}
+                    </p>
+                  </div>
+
+                  <div className="px-6 py-4 border-t border-line space-y-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-ink/50 text-xs mb-1">Jumlah</p>
+                        <p className="font-semibold text-ink">
+                          {order.qty} {order.unit}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-ink/50 text-xs mb-1">Total Bayar</p>
+                        <p className="font-semibold text-forest-dark">
+                          {formatRupiah(order.totalPrice)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-line space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-forest"></div>
+                        <span className="text-xs text-ink/60">
+                          Pesanan dibuat:{" "}
+                          <span className="font-semibold text-ink">
+                            {order.createdAt?.toDate?.()?.toLocaleDateString(
+                              "id-ID",
+                              {
+                                weekday: "short",
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </span>
+                        </span>
+                      </div>
+
+                      {order.confirmedAt && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-forest"></div>
+                          <span className="text-xs text-ink/60">
+                            Dikonfirmasi oleh mitra:{" "}
+                            <span className="font-semibold text-ink">
+                              {order.confirmedAt?.toDate?.()?.toLocaleDateString(
+                                "id-ID",
+                                {
+                                  weekday: "short",
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
+                      {order.completedAt && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-forest"></div>
+                          <span className="text-xs text-ink/60">
+                            Selesai diambil:{" "}
+                            <span className="font-semibold text-ink">
+                              {order.completedAt?.toDate?.()?.toLocaleDateString(
+                                "id-ID",
+                                {
+                                  weekday: "short",
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
+                      {order.cancelledAt && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-clay"></div>
+                          <span className="text-xs text-ink/60">
+                            Dibatalkan:{" "}
+                            <span className="font-semibold text-clay">
+                              {order.cancelledAt?.toDate?.()?.toLocaleDateString(
+                                "id-ID",
+                                {
+                                  weekday: "short",
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </span>
+                          </span>
+                        </div>
                       )}
                     </div>
-                  </div>
-                </div>
 
-                <div className="px-6 py-4 bg-ink/2">
-                  <p className="text-sm text-ink/70">
-                    {statusDescription(order.status)}
-                  </p>
-                </div>
-
-                <div className="px-6 py-4 border-t border-line space-y-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-ink/50 text-xs mb-1">Jumlah</p>
-                      <p className="font-semibold text-ink">
-                        {order.qty} {order.unit}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-ink/50 text-xs mb-1">Total Bayar</p>
-                      <p className="font-semibold text-forest-dark">
-                        {formatRupiah(order.totalPrice)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t border-line space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-forest"></div>
-                      <span className="text-xs text-ink/60">
-                        Pesanan dibuat:{" "}
+                    <div className="mt-4 pt-4 border-t border-line">
+                      <p className="text-xs text-ink/50">
+                        Nama:{" "}
                         <span className="font-semibold text-ink">
-                          {order.createdAt?.toDate?.()?.toLocaleDateString(
-                            "id-ID",
-                            {
-                              weekday: "short",
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
+                          {order.customerName}
                         </span>
-                      </span>
+                      </p>
+                      <p className="text-xs text-ink/50 mt-1">
+                        HP:{" "}
+                        <span className="font-semibold text-ink">
+                          {order.customerPhone}
+                        </span>
+                      </p>
                     </div>
-
-                    {order.confirmedAt && (
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-forest"></div>
-                        <span className="text-xs text-ink/60">
-                          Dikonfirmasi oleh mitra:{" "}
-                          <span className="font-semibold text-ink">
-                            {order.confirmedAt?.toDate?.()?.toLocaleDateString(
-                              "id-ID",
-                              {
-                                weekday: "short",
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </span>
-                        </span>
-                      </div>
-                    )}
-
-                    {order.completedAt && (
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-forest"></div>
-                        <span className="text-xs text-ink/60">
-                          Selesai diambil:{" "}
-                          <span className="font-semibold text-ink">
-                            {order.completedAt?.toDate?.()?.toLocaleDateString(
-                              "id-ID",
-                              {
-                                weekday: "short",
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </span>
-                        </span>
-                      </div>
-                    )}
-
-                    {order.cancelledAt && (
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-clay"></div>
-                        <span className="text-xs text-ink/60">
-                          Dibatalkan:{" "}
-                          <span className="font-semibold text-clay">
-                            {order.cancelledAt?.toDate?.()?.toLocaleDateString(
-                              "id-ID",
-                              {
-                                weekday: "short",
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </span>
-                        </span>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-line">
-                    <p className="text-xs text-ink/50">
-                      Nama:{" "}
-                      <span className="font-semibold text-ink">
-                        {order.customerName}
-                      </span>
-                    </p>
-                    <p className="text-xs text-ink/50 mt-1">
-                      HP:{" "}
-                      <span className="font-semibold text-ink">
-                        {order.customerPhone}
-                      </span>
-                    </p>
-                  </div>
+                  {isPendingPayment && (
+                    <div className="px-6 py-4 bg-turmeric-light/30 border-t border-line">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          goToPayment(order);
+                        }}
+                        className="w-full rounded-full bg-turmeric-dark text-white font-semibold px-6 py-2.5 text-sm hover:opacity-90 transition-opacity"
+                      >
+                        Lanjutkan Pembayaran →
+                      </button>
+                    </div>
+                  )}
+
+                  {order.status === "confirmed" && (
+                    <div className="px-6 py-4 bg-forest-light/20 border-t border-line">
+                      <p className="text-xs font-semibold text-forest-dark mb-3">
+                        ⚠️ Jangan lupa ambil pesanan dengan kode di atas!
+                      </p>
+
+                      <a
+                        href="/discover"
+                        className="inline-block text-xs font-semibold text-forest hover:underline"
+                      >
+                        ← Kembali cari makanan lain
+                      </a>
+                    </div>
+                  )}
                 </div>
-
-                {order.status === "confirmed" && (
-                  <div className="px-6 py-4 bg-forest-light/20 border-t border-line">
-                    <p className="text-xs font-semibold text-forest-dark mb-3">
-                      ⚠️ Jangan lupa ambil pesanan dengan kode di atas!
-                    </p>
-
-                    <a
-                      href="/discover"
-                      className="inline-block text-xs font-semibold text-forest hover:underline"
-                    >
-                      ← Kembali cari makanan lain
-                    </a>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
