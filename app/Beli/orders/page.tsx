@@ -1,20 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import Navbar from "@/components/Navbar";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  doc,
-  updateDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { formatRupiah } from "@/lib/format";
+
+declare global {
+  interface Window {
+    snap: any;
+  }
+}
 
 type OrderStatus =
   | "menunggu_pembayaran"
@@ -41,16 +39,14 @@ type Order = {
   confirmedAt?: any;
   completedAt?: any;
   cancelledAt?: any;
+  // Kapan batas waktu pembayaran habis. Ini datang dari server
+  // (create-transaction / retry-transaction), bukan dihitung sendiri di client,
+  // supaya selalu sinkron dengan expiry Midtrans yang sebenarnya.
+  expiresAt?: any;
 };
 
 const SEMUA = "Semua";
 type FilterValue = typeof SEMUA | OrderStatus;
-
-// Batas waktu pembayaran: 5 menit sejak order dibuat
-const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000;
-
-// Sesuaikan dengan route halaman pembayaran kamu yang sebenarnya
-const PAYMENT_ROUTE = (orderId: string) => `/pay/${orderId}`;
 
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: SEMUA, label: "Semua" },
@@ -137,9 +133,11 @@ function paymentLabel(paymentStatus: PaymentStatus) {
 }
 
 function getRemainingMs(order: Order) {
-  const createdMs = order.createdAt?.toMillis?.() ?? Date.now();
-  const deadline = createdMs + PAYMENT_TIMEOUT_MS;
-  return deadline - Date.now();
+  const deadlineMs = order.expiresAt?.toMillis?.();
+  // Kalau expiresAt belum ada di dokumen (mis. data lama sebelum field ini
+  // ditambahkan), jangan tampilkan countdown sama sekali daripada menebak.
+  if (!deadlineMs) return null;
+  return deadlineMs - Date.now();
 }
 
 function formatCountdown(ms: number) {
@@ -150,46 +148,31 @@ function formatCountdown(ms: number) {
 }
 
 /**
- * Menampilkan hitung mundur batas waktu pembayaran.
- * Memanggil onExpire sekali saat waktu habis (dan order masih pending).
+ * Menampilkan hitung mundur berdasarkan expiresAt yang tersimpan di Firestore.
+ * Ini murni tampilan — TIDAK mengubah status apa pun. Pembatalan sesungguhnya
+ * dilakukan oleh webhook Midtrans (midtrans-notifications/route.ts) di server,
+ * dan perubahan statusnya akan otomatis masuk lewat onSnapshot di komponen induk.
  */
-function PaymentCountdown({
-  order,
-  onExpire,
-}: {
-  order: Order;
-  onExpire: (order: Order) => void;
-}) {
+function PaymentCountdown({ order }: { order: Order }) {
   const [remaining, setRemaining] = useState(() => getRemainingMs(order));
 
   useEffect(() => {
-    // Reset setiap kali order berubah (mis. createdAt baru dari server)
     setRemaining(getRemainingMs(order));
 
-    if (getRemainingMs(order) <= 0) return;
-
     const interval = setInterval(() => {
-      setRemaining((prev) => {
-        const next = prev - 1000;
-        if (next <= 0) {
-          clearInterval(interval);
-          onExpire(order);
-          return 0;
-        }
-        return next;
-      });
+      setRemaining(getRemainingMs(order));
     }, 1000);
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order.id, order.createdAt]);
+  }, [order.expiresAt]);
 
   if (order.status !== "menunggu_pembayaran") return null;
+  if (remaining === null) return null;
 
   if (remaining <= 0) {
     return (
-      <span className="text-xs font-semibold text-clay">
-        Waktu pembayaran habis, membatalkan pesanan…
+      <span className="text-xs font-semibold text-ink/40">
+        Menunggu pembatalan otomatis…
       </span>
     );
   }
@@ -242,7 +225,6 @@ export default function OrdersPage() {
             } as Order)
         );
 
-        // Sort: status terbaru dulu (menunggu_pembayaran > menunggu > confirmed > selesai > dibatalkan)
         const statusOrder: Record<OrderStatus, number> = {
           menunggu_pembayaran: 0,
           menunggu: 1,
@@ -273,7 +255,25 @@ export default function OrdersPage() {
     return () => unsub();
   }, [uid, checkingAuth]);
 
-  // Hitung jumlah order per status, buat badge angka di tab
+  // Deteksi transisi "menunggu_pembayaran" -> "dibatalkan" (hasil webhook Midtrans
+  // yang expire) lalu otomatis pindah ke tab "Dibatalkan". Ini reaksi terhadap
+  // data server, bukan pemicu perubahan itu sendiri.
+  const prevStatusesRef = useRef<Record<string, OrderStatus>>({});
+  useEffect(() => {
+    const prev = prevStatusesRef.current;
+    const justExpired = orders.some(
+      (o) => prev[o.id] === "menunggu_pembayaran" && o.status === "dibatalkan"
+    );
+
+    if (justExpired) {
+      setActiveFilter("dibatalkan");
+    }
+
+    prevStatusesRef.current = Object.fromEntries(
+      orders.map((o) => [o.id, o.status])
+    );
+  }, [orders]);
+
   const filterCounts = useMemo(() => {
     const counts: Record<string, number> = { [SEMUA]: orders.length };
     for (const o of orders) {
@@ -287,41 +287,61 @@ export default function OrdersPage() {
     return orders.filter((o) => o.status === activeFilter);
   }, [orders, activeFilter]);
 
-  // Set untuk mencegah pembatalan ganda saat re-render
-  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+  // Untuk tombol "Lanjutkan Pembayaran"
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<Record<string, string>>({});
 
-  const handleExpirePayment = useCallback(
+  const handlePayNow = useCallback(
     async (order: Order) => {
-      // Kalau ternyata sudah dibayar / bukan lagi menunggu_pembayaran, jangan batalkan
-      if (order.paymentStatus === "paid") return;
       if (order.status !== "menunggu_pembayaran") return;
-      if (cancellingIds.has(order.id)) return;
+      if (!uid) return;
+      if (!window.snap) {
+        setRetryError((prev) => ({
+          ...prev,
+          [order.id]: "Modul pembayaran belum siap, coba refresh halaman.",
+        }));
+        return;
+      }
 
-      setCancellingIds((prev) => new Set(prev).add(order.id));
+      setRetryingId(order.id);
+      setRetryError((prev) => {
+        const next = { ...prev };
+        delete next[order.id];
+        return next;
+      });
 
       try {
-        await updateDoc(doc(db, "claims", order.id), {
-          status: "dibatalkan",
-          cancelledAt: serverTimestamp(),
-          cancelReason: "payment_timeout",
+        const res = await fetch("/api/payment/retry-transaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ claimId: order.id, customerId: uid }),
         });
-      } catch (err) {
-        console.error("Gagal membatalkan pesanan otomatis:", err);
-      } finally {
-        setCancellingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(order.id);
-          return next;
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Gagal membuat ulang transaksi.");
+
+        window.snap.pay(data.token, {
+          onSuccess: () => setRetryingId(null),
+          onPending: () => setRetryingId(null),
+          onError: () => {
+            setRetryingId(null);
+            setRetryError((prev) => ({
+              ...prev,
+              [order.id]: "Pembayaran gagal. Coba lagi.",
+            }));
+          },
+          onClose: () => setRetryingId(null),
         });
+      } catch (err: any) {
+        setRetryingId(null);
+        setRetryError((prev) => ({
+          ...prev,
+          [order.id]: err.message || "Gagal memproses pembayaran. Coba lagi.",
+        }));
       }
     },
-    [cancellingIds]
+    [uid]
   );
-
-  const goToPayment = (order: Order) => {
-    if (order.status !== "menunggu_pembayaran") return;
-    router.push(PAYMENT_ROUTE(order.id));
-  };
 
   return (
     <main className="min-h-screen bg-cream">
@@ -411,17 +431,18 @@ export default function OrdersPage() {
           <div className="space-y-4">
             {filteredOrders.map((order) => {
               const isPendingPayment = order.status === "menunggu_pembayaran";
+              const isRetrying = retryingId === order.id;
 
               return (
                 <div
                   key={order.id}
                   role={isPendingPayment ? "button" : undefined}
                   tabIndex={isPendingPayment ? 0 : undefined}
-                  onClick={() => isPendingPayment && goToPayment(order)}
+                  onClick={() => isPendingPayment && handlePayNow(order)}
                   onKeyDown={(e) => {
                     if (isPendingPayment && (e.key === "Enter" || e.key === " ")) {
                       e.preventDefault();
-                      goToPayment(order);
+                      handlePayNow(order);
                     }
                   }}
                   className={`bg-white rounded-card border overflow-hidden transition-colors ${
@@ -445,12 +466,7 @@ export default function OrdersPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        {isPendingPayment && (
-                          <PaymentCountdown
-                            order={order}
-                            onExpire={handleExpirePayment}
-                          />
-                        )}
+                        {isPendingPayment && <PaymentCountdown order={order} />}
 
                         <span
                           className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${statusBadgeColor(
@@ -603,14 +619,21 @@ export default function OrdersPage() {
                     <div className="px-6 py-4 bg-turmeric-light/30 border-t border-line">
                       <button
                         type="button"
+                        disabled={isRetrying}
                         onClick={(e) => {
                           e.stopPropagation();
-                          goToPayment(order);
+                          handlePayNow(order);
                         }}
-                        className="w-full rounded-full bg-turmeric-dark text-white font-semibold px-6 py-2.5 text-sm hover:opacity-90 transition-opacity"
+                        className="w-full rounded-full bg-turmeric-dark text-white font-semibold px-6 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
                       >
-                        Lanjutkan Pembayaran →
+                        {isRetrying ? "Membuka pembayaran..." : "Lanjutkan Pembayaran →"}
                       </button>
+
+                      {retryError[order.id] && (
+                        <p className="text-xs text-clay mt-2">
+                          {retryError[order.id]}
+                        </p>
+                      )}
                     </div>
                   )}
 

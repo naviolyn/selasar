@@ -8,9 +8,13 @@ const snap = new midtransClient.Snap({
   serverKey: process.env.MIDTRANS_SERVER_KEY!,
 });
 
+// Satu tempat untuk mengatur berapa lama batas waktu pembayaran.
+// Dipakai untuk expiry Midtrans DAN untuk expiresAt di Firestore, supaya
+// keduanya selalu sinkron (jangan diubah di satu tempat saja).
+const PAYMENT_WINDOW_MINUTES = 5;
 
 function generatePickupCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; 
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
   for (let i = 0; i < 4; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
@@ -24,7 +28,7 @@ export async function POST(req: NextRequest) {
       await req.json();
 
     const listingRef = adminDb.collection("listings").doc(listingId);
-    const pickupCode = generatePickupCode(); // tambahkan ini
+    const pickupCode = generatePickupCode();
 
     const result = await adminDb.runTransaction(async (tx) => {
       const listingSnap = await tx.get(listingRef);
@@ -50,12 +54,14 @@ export async function POST(req: NextRequest) {
         qty,
         unit: listing.unit,
         totalPrice,
-        pickupCode, // tambahkan ini
+        pickupCode,
         status: "menunggu_pembayaran",
         paymentStatus: "pending",
         midtransOrderId: orderId,
         createdAt: FieldValue.serverTimestamp(),
-        expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+        expiresAt: Timestamp.fromMillis(
+          Date.now() + PAYMENT_WINDOW_MINUTES * 60 * 1000
+        ),
       });
 
       return { orderId, totalPrice, claimId: claimRef.id, listing };
@@ -80,14 +86,14 @@ export async function POST(req: NextRequest) {
       ],
       expiry: {
         unit: "minutes",
-        duration: 10,
+        duration: PAYMENT_WINDOW_MINUTES,
       },
     });
 
     return NextResponse.json({
       token: transaction.token,
       claimId: result.claimId,
-      pickupCode, // tambahkan ini
+      pickupCode,
     });
   } catch (err: any) {
     console.error("Gagal membuat transaksi:", err);
