@@ -5,9 +5,15 @@ import { useParams, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Navbar from "@/components/Navbar";
-import { getListingById, claimListing, Listing } from "@/lib/firestore-listings";
+import { getListingById, Listing } from "@/lib/firestore-listings";
 import { formatRupiah, formatSisaWaktu, getMinutesRemaining } from "@/lib/format";
 import { auth, db } from "@/lib/firebase";
+
+declare global {
+  interface Window {
+    snap: any;
+  }
+}
 
 export default function ClaimPage() {
   const params = useParams<{ id: string }>();
@@ -106,7 +112,7 @@ export default function ClaimPage() {
   const minutesLeft = getMinutesRemaining(listing.pickupDeadline);
   const total = listing.discountPrice * qty;
 
-  async function handleSubmit(e: React.FormEvent) {
+async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -121,19 +127,42 @@ export default function ClaimPage() {
 
     setSubmitting(true);
     try {
-      const code = await claimListing({
-        listingId: listing!.id,
-        customerId: userId!,
-        qty,
-        customerName: name,
-        customerPhone: phone,
-        note,
+      const res = await fetch("/api/payment/create-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: listing!.id,
+          customerId: userId,
+          customerName: name,
+          customerPhone: phone,
+          qty,
+        }),
       });
-      setPickupCode(code);
-      setStep("success");
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal membuat transaksi.");
+
+      window.snap.pay(data.token, {
+        onSuccess: () => {
+        setPickupCode(data.pickupCode);
+        setStep("success");
+        setSubmitting(false);
+      },
+        onPending: () => {
+          setError("Pembayaran masih diproses. Cek status pesanan di notifikasi ya.");
+          setSubmitting(false);
+        },
+        onError: () => {
+          setError("Pembayaran gagal. Coba lagi.");
+          setSubmitting(false);
+        },
+        onClose: () => {
+          setError("Kamu menutup popup sebelum bayar. Coba klik Konfirmasi lagi.");
+          setSubmitting(false);
+        },
+      });
     } catch (err: any) {
-      setError(err.message || "Gagal memproses klaim. Coba lagi.");
-    } finally {
+      setError(err.message || "Gagal memproses pesanan. Coba lagi.");
       setSubmitting(false);
     }
   }
@@ -193,7 +222,7 @@ export default function ClaimPage() {
                   </span>
                 </div>
                 <div className="flex justify-between text-ink/70">
-                  <span>Total bayar (di tempat)</span>
+                  <span>Total bayar</span>
                   <span className="font-semibold text-forest-dark">
                     {formatRupiah(total)}
                   </span>
@@ -207,9 +236,7 @@ export default function ClaimPage() {
               </div>
 
               <p className="text-xs text-ink/50 mt-5 leading-relaxed">
-                Konfirmasi juga dikirim ke {phone}. Kalau berubah pikiran, cukup
-                jangan datang — tapi kasih tau mitra dulu ya biar bisa dialihkan
-                ke orang lain.
+                Terima kasih sudah menyelamatkan makanan ini. Semoga bermanfaat!
               </p>
 
               <div className="mt-6 flex flex-col gap-2">
@@ -377,7 +404,7 @@ export default function ClaimPage() {
               <div className="dash-divider !border-line" />
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-ink/70">Total bayar di tempat</span>
+                <span className="text-ink/70">Total bayar</span>
                 <span className="font-display text-lg font-bold text-forest-dark">
                   {formatRupiah(total)}
                 </span>

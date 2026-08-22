@@ -8,15 +8,24 @@ const snap = new midtransClient.Snap({
   serverKey: process.env.MIDTRANS_SERVER_KEY!,
 });
 
+
+function generatePickupCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; 
+  let code = "";
+  for (let i = 0; i < 4; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `SLS-${code}`;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { listingId, customerId, customerName, customerPhone, qty } =
       await req.json();
 
     const listingRef = adminDb.collection("listings").doc(listingId);
+    const pickupCode = generatePickupCode(); // tambahkan ini
 
-    // Transaksi Firestore: cek & kurangi stok secara atomik, biar nggak race condition
-    // kalau ada 2 pelanggan klaim bersamaan.
     const result = await adminDb.runTransaction(async (tx) => {
       const listingSnap = await tx.get(listingRef);
       if (!listingSnap.exists) throw new Error("Listing tidak ditemukan.");
@@ -41,6 +50,7 @@ export async function POST(req: NextRequest) {
         qty,
         unit: listing.unit,
         totalPrice,
+        pickupCode, // tambahkan ini
         status: "menunggu_pembayaran",
         paymentStatus: "pending",
         midtransOrderId: orderId,
@@ -51,7 +61,6 @@ export async function POST(req: NextRequest) {
       return { orderId, totalPrice, claimId: claimRef.id, listing };
     });
 
-    // Buat transaksi Snap dengan expiry 10 menit — Midtrans yang jagain timernya
     const transaction = await snap.createTransaction({
       transaction_details: {
         order_id: result.orderId,
@@ -78,6 +87,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       token: transaction.token,
       claimId: result.claimId,
+      pickupCode, // tambahkan ini
     });
   } catch (err: any) {
     console.error("Gagal membuat transaksi:", err);
