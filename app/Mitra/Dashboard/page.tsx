@@ -194,7 +194,7 @@ export default function MitraDashboardPage() {
 
   if (authError) {
     return (
-      <main className="min-h-screen bg-cream flex items-center justify-center">
+      <main className="min-h-screen bg-cream flex items-center justify-center px-4 text-center">
         <p className="text-sm text-clay">{authError}</p>
       </main>
     );
@@ -205,65 +205,59 @@ export default function MitraDashboardPage() {
 
   return (
     <main className="min-h-screen bg-cream">
-      <header className="border-b border-line bg-white/70 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="font-display text-xl font-bold text-forest-dark">
-            SELASAR{" "}
-            <span className="text-ink/40 font-normal text-sm">· Mitra</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <a
-              href="/Mitra/Pesanan"
-              className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
-            >
-              Kelola Pesanan
-            </a>
-            <span className="text-sm text-ink/60 hidden sm:inline">
-              Halo, {mitraName}
-            </span>
-            <button
-              onClick={handleLogout}
-              className="text-sm font-medium text-ink/60 hover:text-clay transition-colors"
-            >
-              Keluar
-            </button>
-          </div>
+      <header className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-line px-4 sm:px-6 lg:px-10 py-3.5 sm:py-4 flex items-center justify-between w-full">
+        <a href="/Mitra/Dashboard" className="font-display text-lg sm:text-xl font-bold text-forest-dark shrink-0">
+          SELASAR{" "}
+        </a>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <a
+            href="/Mitra/Pesanan"
+            className="text-sm font-semibold text-ink/70 hover:text-forest px-3 py-1.5 transition-colors"
+          >
+            Kelola Pesanan
+          </a>
+          <button
+            onClick={handleLogout}
+            className="text-sm font-semibold text-ink/70 hover:text-ink px-2 py-1.5 transition-colors"
+          >
+            Keluar
+          </button>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-        <section className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-card border border-line p-5">
-            <p className="text-xs text-ink/50">Listing Aktif</p>
-            <p className="font-display text-2xl font-semibold text-ink mt-1">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="bg-white rounded-card border border-line/70 shadow-sm shadow-ink/5 p-4 sm:p-5">
+            <p className="font-mono text-[11px] uppercase tracking-wide text-ink/50">Listing Aktif</p>
+            <p className="font-display text-xl sm:text-2xl font-semibold text-ink mt-1">
               {activeListings.length}
             </p>
           </div>
-          <div className="bg-white rounded-card border border-line p-5">
-            <p className="text-xs text-ink/50">Klaim Menunggu</p>
+          <div className="bg-white rounded-card border border-line/70 shadow-sm shadow-ink/5 p-4 sm:p-5">
+            <p className="font-mono text-[11px] uppercase tracking-wide text-ink/50">Klaim Menunggu</p>
             <a
               href="/Mitra/Pesanan"
-              className="block font-display text-2xl font-semibold text-forest mt-1 hover:underline"
+              className="block font-display text-xl sm:text-2xl font-semibold text-forest mt-1 hover:underline"
             >
               {claims.length}
             </a>
           </div>
-          <div className="bg-white rounded-card border border-line p-5 col-span-2 sm:col-span-1">
-            <p className="text-xs text-ink/50">Total Kontribusi</p>
-            <p className="font-display text-2xl font-semibold text-ink mt-1">
+          <div className="bg-white rounded-card border border-line/70 shadow-sm shadow-ink/5 p-4 sm:p-5 col-span-2 sm:col-span-1">
+            <p className="font-mono text-[11px] uppercase tracking-wide text-ink/50">Total Kontribusi</p>
+            <p className="font-display text-xl sm:text-2xl font-semibold text-ink mt-1">
               {completedListings.length}
             </p>
           </div>
         </section>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h2 className="font-display text-lg font-semibold text-ink">
             Listing Kamu
           </h2>
 
           <a
             href="/Mitra/Upload"
-            className="rounded-full bg-forest text-white font-semibold px-5 py-2.5 text-sm hover:bg-forest-dark transition-colors"
+            className="rounded-full bg-forest text-white font-semibold px-5 py-2.5 text-sm hover:bg-forest-dark transition-colors text-center"
           >
             + Tambah Listing
           </a>
@@ -277,13 +271,13 @@ export default function MitraDashboardPage() {
 
         {claims.length > 0 && (
           <section>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2">
               <h3 className="text-sm font-semibold text-ink/70">
                 Klaim menunggu konfirmasi
               </h3>
               <a
                 href="/Mitra/Pesanan"
-                className="text-xs font-semibold text-forest hover:underline"
+                className="text-xs font-semibold text-forest hover:underline whitespace-nowrap"
               >
                 Lihat semua pesanan →
               </a>
@@ -292,10 +286,10 @@ export default function MitraDashboardPage() {
               {claims.map((c) => (
                 <div
                   key={c.id}
-                  className="bg-white rounded-card border border-forest/30 p-4 flex items-center justify-between gap-4"
+                  className="bg-white rounded-card border border-forest/30 shadow-sm shadow-ink/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-ink">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink truncate">
                       {c.listingTitle ?? "Listing"}
                     </p>
                     <p className="text-xs text-ink/50 mt-0.5">
@@ -308,7 +302,7 @@ export default function MitraDashboardPage() {
                   <button
                     onClick={() => handleConfirmClaim(c.id)}
                     disabled={busyId === c.id}
-                    className="rounded-full bg-forest text-white text-xs font-semibold px-4 py-2 hover:bg-forest-dark transition-colors disabled:opacity-60 whitespace-nowrap"
+                    className="rounded-full bg-forest text-white text-xs font-semibold px-4 py-2 hover:bg-forest-dark transition-colors disabled:opacity-60 whitespace-nowrap w-full sm:w-auto"
                   >
                     {busyId === c.id ? "..." : "Konfirmasi"}
                   </button>
@@ -328,67 +322,97 @@ export default function MitraDashboardPage() {
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
-            {listings.map((l) => (
-              <div
-                key={l.id}
-                className="bg-white rounded-card border border-line overflow-hidden"
-              >
-                <div className="h-32 bg-forest-light">
-                  {l.imageUrl && (
-                    <img
-                      src={l.imageUrl}
-                      alt={l.title}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-                </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-ink">{l.title}</p>
+            {listings.map((l) => {
+              const discountPct = l.originalPrice
+                ? Math.round((1 - l.discountPrice / l.originalPrice) * 100)
+                : 0;
+              return (
+                <article
+                  key={l.id}
+                  className="w-full rounded-card bg-white shadow-sm shadow-ink/5 overflow-hidden border border-line/70"
+                >
+                  {/* Foto listing + badge status */}
+                  <div className="relative h-40 bg-forest-light flex items-center justify-center overflow-hidden">
+                    {l.imageUrl && (
+                      <img
+                        src={l.imageUrl}
+                        alt={l.title}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                      className={`absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-semibold ${
                         l.status === "active"
                           ? "bg-forest-light text-forest-dark"
-                          : "bg-line text-ink/50"
+                          : "bg-line text-ink/60"
                       }`}
                     >
                       {l.status === "active" ? "Aktif" : "Selesai"}
                     </span>
                   </div>
-                  <p className="text-xs text-ink/50 mt-1">
-                    {l.category} · {l.quantityLeft} {l.unit} tersisa
-                  </p>
-                  <p className="text-sm font-semibold text-forest mt-2">
-                    Rp{l.discountPrice.toLocaleString("id-ID")}
-                  </p>
 
-                  <div className="mt-3 flex items-center gap-2">
-                    <a
-                      href={`/Mitra/Listing/${l.id}/Edit`}
-                      className="flex-1 text-center rounded-full border border-line text-ink text-xs font-semibold py-2 hover:bg-forest-light transition-colors"
-                    >
-                      Edit
-                    </a>
-                    <button
-                      onClick={() => setDeleteTarget(l)}
-                      className="flex-1 rounded-full border border-clay text-clay text-xs font-semibold py-2 hover:bg-clay-light transition-colors"
-                    >
-                      Hapus
-                    </button>
+                  {/* Sobekan tiket — motif signature, konsisten dengan ListingCard */}
+                  <div className="ticket-notch bg-white" />
+                  <div className="dash-divider" />
+
+                  <div className="p-4 pt-3">
+                    <p className="font-mono text-[11px] uppercase tracking-wide text-forest-dark/70">
+                      {l.category}
+                    </p>
+                    <h3 className="font-display text-lg font-semibold text-ink leading-snug mt-0.5">
+                      {l.title}
+                    </h3>
+
+                    <div className="mt-3 flex items-end justify-between">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-display text-xl font-bold text-forest-dark">
+                          Rp{l.discountPrice.toLocaleString("id-ID")}
+                        </span>
+                        {l.originalPrice > l.discountPrice && (
+                          <span className="text-sm text-ink/40 line-through">
+                            Rp{l.originalPrice.toLocaleString("id-ID")}
+                          </span>
+                        )}
+                      </div>
+                      {discountPct > 0 && (
+                        <span className="text-xs font-semibold text-clay bg-clay-light rounded-full px-2 py-1">
+                          -{discountPct}%
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-3 text-xs text-ink/50">
+                      Sisa {l.quantityLeft} {l.unit}
+                    </p>
+
+                    <div className="mt-4 flex items-center gap-2">
+                      <a
+                        href={`/Mitra/Listing/${l.id}/Edit`}
+                        className="flex-1 text-center rounded-full border border-line text-ink text-xs font-semibold py-2 hover:bg-forest-light transition-colors"
+                      >
+                        Edit
+                      </a>
+                      <button
+                        onClick={() => setDeleteTarget(l)}
+                        className="flex-1 rounded-full border border-clay text-clay text-xs font-semibold py-2 hover:bg-clay-light transition-colors"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+
+                    {l.status === "active" && (
+                      <button
+                        onClick={() => handleMarkCompleted(l.id)}
+                        disabled={busyId === l.id}
+                        className="mt-2 w-full rounded-full bg-forest text-white font-semibold py-2.5 text-sm hover:bg-forest-dark transition-colors disabled:opacity-60"
+                      >
+                        {busyId === l.id ? "..." : "Tandai Selesai"}
+                      </button>
+                    )}
                   </div>
-
-                  {l.status === "active" && (
-                    <button
-                      onClick={() => handleMarkCompleted(l.id)}
-                      disabled={busyId === l.id}
-                      className="mt-2 w-full rounded-full border border-line text-ink text-xs font-semibold py-2 hover:bg-forest-light transition-colors disabled:opacity-60"
-                    >
-                      {busyId === l.id ? "..." : "Tandai Selesai"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
