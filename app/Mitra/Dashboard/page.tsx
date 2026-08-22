@@ -225,7 +225,7 @@ export default function MitraDashboardPage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8 space-y-6 sm:space-y-8">
+      <div className="max-w-6xl mx-auto px-6 lg:px-10 pb-24 pt-10 space-y-6 sm:space-y-8">
         <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           <div className="bg-white rounded-card border border-line/70 shadow-sm shadow-ink/5 p-4 sm:p-5">
             <p className="font-mono text-[11px] uppercase tracking-wide text-ink/50">Listing Aktif</p>

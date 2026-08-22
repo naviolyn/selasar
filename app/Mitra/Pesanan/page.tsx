@@ -304,35 +304,36 @@ export default function MitraPesananPage() {
 
   return (
     <main className="min-h-screen bg-cream">
-      <header className="border-b border-line/70 bg-white/70 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="font-display text-xl font-bold text-forest-dark">
-            SELASAR{" "}
-            <span className="text-ink/40 font-normal text-sm">· Mitra</span>
-          </div>
-          <div className="flex items-center gap-4">
-  <a
-    href="/Mitra/Dashboard"
-    className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
-  >
-    Dashboard
-  </a>
-
-  <span className="text-sm text-ink/60 hidden sm:inline">
-    Halo, {mitraName}
-  </span>
-
-  <button
-    onClick={handleLogout}
-    className="text-sm font-medium text-ink/60 hover:text-clay transition-colors"
-  >
-    Keluar
-  </button>
-</div>
+      <header className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-line px-4 sm:px-6 lg:px-10 py-3.5 sm:py-4 flex items-center justify-between w-full">
+        <div className="font-display text-lg sm:text-xl font-bold text-forest-dark shrink-0">
+          SELASAR{" "}
+        </div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <a
+            href="/Mitra/Dashboard"
+            className="text-sm font-semibold text-ink/70 hover:text-forest px-3 py-1.5 transition-colors"
+          >
+            Dashboard
+          </a>
+          <button
+            onClick={handleLogout}
+            className="text-sm font-semibold text-ink/70 hover:text-ink px-2 py-1.5 transition-colors"
+          >
+            Keluar
+          </button>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+        <div className="flex items-center gap-4">
+          <a
+            href="/Mitra/Dashboard"
+            className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
+          >
+            ← Kembali
+          </a>
+        </div>
+
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">
             Kelola Pesanan

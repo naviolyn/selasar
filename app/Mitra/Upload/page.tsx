@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   addDoc,
   collection,
@@ -289,6 +289,11 @@ export default function UploadListingPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  async function handleLogout() {
+    await signOut(auth);
+    router.replace("/login");
+  }
+
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-cream flex items-center justify-center">
@@ -307,27 +312,32 @@ export default function UploadListingPage() {
 
   return (
     <main className="min-h-screen bg-cream">
-      <header className="border-b border-line bg-white/70 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-line px-4 sm:px-6 lg:px-10 py-3.5 sm:py-4 flex items-center justify-between w-full">
+        <a
+          href="/Mitra/Dashboard"
+          className="font-display text-lg sm:text-xl font-bold text-forest-dark shrink-0"
+        >
+          SELASAR{" "}
+        </a>
+        <div className="flex items-center gap-2 sm:gap-3">
           <a
-            href="/Mitra/Dashboard"
-            className="font-display text-xl font-bold text-forest-dark"
+            href="/Mitra/Pesanan"
+            className="text-sm font-semibold text-ink/70 hover:text-forest px-3 py-1.5 transition-colors"
           >
-            SELASAR{" "}
-            <span className="text-ink/40 font-normal text-sm">· Mitra</span>
+            Kelola Pesanan
           </a>
-          <a
-            href="/Mitra/Dashboard"
-            className="text-sm font-medium text-ink/60 hover:text-ink"
+          <button
+            onClick={handleLogout}
+            className="text-sm font-semibold text-ink/70 hover:text-ink px-2 py-1.5 transition-colors"
           >
-            Kembali
-          </a>
+            Keluar
+          </button>
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-6 py-10">
+      <div className="max-w-6xl mx-auto px-6 py-8">
         {success ? (
-          <div className="bg-white rounded-card border border-line shadow-sm shadow-ink/5 p-8 text-center">
+          <div className="max-w-2xl bg-white rounded-card border border-line shadow-sm shadow-ink/5 p-8 text-center">
             <p className="font-display text-2xl font-semibold text-ink">
               Makanan berhasil diunggah 🎉
             </p>
@@ -353,15 +363,22 @@ export default function UploadListingPage() {
           </div>
         ) : (
           <>
-            <h1 className="font-display text-2xl font-semibold text-ink">
-              Upload makanan berlebih
-            </h1>
-            <p className="text-sm text-ink/60 mt-1">
-              Isi detail makanan yang mau diselamatkan. Semakin jelas fotonya,
-              semakin cepat diklaim.
-            </p>
+            <div className="flex items-center gap-4 mb-6">
+              <a
+                href="/Mitra/Dashboard"
+                className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
+              >
+                ← Kembali
+              </a>
+            </div>
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {error && (
+                <p className="text-sm text-clay bg-clay-light rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
+
               {/* Upload foto */}
               <div>
                 <label className="block text-sm font-medium text-ink mb-1.5">
@@ -560,12 +577,6 @@ export default function UploadListingPage() {
                   <p className="text-xs text-clay mt-1.5">{locationError}</p>
                 )}
               </div>
-
-              {error && (
-                <p className="text-sm text-clay bg-clay-light rounded-lg px-3 py-2">
-                  {error}
-                </p>
-              )}
 
               <button
                 type="submit"

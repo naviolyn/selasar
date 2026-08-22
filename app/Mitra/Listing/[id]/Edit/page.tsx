@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
@@ -304,6 +304,11 @@ export default function EditListingPage() {
     }
   }
 
+  async function handleLogout() {
+    await signOut(auth);
+    router.replace("/login");
+  }
+
   if (checkingAuth || loadingListing) {
     return (
       <main className="min-h-screen bg-cream flex items-center justify-center">
@@ -338,213 +343,238 @@ export default function EditListingPage() {
 
   return (
     <main className="min-h-screen bg-cream">
-      <header className="border-b border-line bg-white/70 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-4">
+      <header className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-line px-4 sm:px-6 lg:px-10 py-3.5 sm:py-4 flex items-center justify-between w-full">
+        <a
+          href="/Mitra/Dashboard"
+          className="font-display text-lg sm:text-xl font-bold text-forest-dark shrink-0"
+        >
+          SELASAR{" "}
+        </a>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <a
+            href="/Mitra/Pesanan"
+            className="text-sm font-semibold text-ink/70 hover:text-forest px-3 py-1.5 transition-colors"
+          >
+            Kelola Pesanan
+          </a>
+          <button
+            onClick={handleLogout}
+            className="text-sm font-semibold text-ink/70 hover:text-ink px-2 py-1.5 transition-colors"
+          >
+            Keluar
+          </button>
+        </div>
+      </header>
+
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="flex items-center gap-4 mb-6">
           <a
             href="/Mitra/Dashboard"
             className="text-sm font-medium text-ink/60 hover:text-ink transition-colors"
           >
             ← Kembali
           </a>
-          <div className="font-display text-lg font-bold text-forest-dark">
-            Edit Listing
-          </div>
         </div>
-      </header>
 
-      <div className="max-w-2xl mx-auto px-6 py-8">
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white rounded-card border border-line p-6 space-y-5"
-        >
+        <form onSubmit={handleSubmit}>
           {formError && (
-            <p className="text-sm text-clay bg-clay-light rounded-lg px-3 py-2">
+            <p className="text-sm text-clay bg-clay-light rounded-lg px-3 py-2 mb-5">
               {formError}
             </p>
           )}
           {saved && (
-            <p className="text-sm text-forest-dark bg-forest-light rounded-lg px-3 py-2">
+            <p className="text-sm text-forest-dark bg-forest-light rounded-lg px-3 py-2 mb-5">
               Perubahan berhasil disimpan.
             </p>
           )}
 
-          {/* Foto */}
-          <div>
-            <label className="block text-xs font-semibold text-ink/60 mb-2">
-              Foto Produk
-            </label>
-            <div className="h-40 rounded-card bg-forest-light overflow-hidden mb-2">
-              {imagePreview ? (
-                <img
-                  src={imagePreview}
-                  alt="Pratinjau foto listing"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-ink/40">
-                  Belum ada foto
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-10">
+            {/* Kolom kiri: foto produk */}
+            <div>
+              <div className="rounded-2xl overflow-hidden bg-forest-light">
+                <div className="relative w-full aspect-[16/10] sm:aspect-[16/9]">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Pratinjau foto listing"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-ink/40">
+                      Belum ada foto
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImagePick}
-              className="text-xs text-ink/60 file:mr-3 file:rounded-full file:border-0 file:bg-forest-light file:px-4 file:py-2 file:text-xs file:font-semibold file:text-forest-dark hover:file:bg-forest/20"
-            />
-          </div>
+              </div>
 
-          {/* Judul */}
-          <div>
-            <label className="block text-xs font-semibold text-ink/60 mb-1.5">
-              Judul Listing
-            </label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => handleChange("title", e.target.value)}
-              placeholder="mis. Nasi Kotak Sisa Katering"
-              className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
-            />
-          </div>
-
-          {/* Kategori & Satuan */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-ink/60 mb-1.5">
-                Kategori
-              </label>
-              <select
-                value={form.category}
-                onChange={(e) => handleChange("category", e.target.value)}
-                className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-ink/60 mb-1.5">
-                Satuan
-              </label>
-              <select
-                value={form.unit}
-                onChange={(e) => handleChange("unit", e.target.value)}
-                className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
-              >
-                {UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Harga */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-ink/60 mb-1.5">
-                Harga Asli (Rp)
+              <label className="block text-xs font-semibold text-ink/60 mt-4 mb-2">
+                Foto Produk
               </label>
               <input
-                type="number"
-                min={0}
-                value={form.originalPrice}
-                onChange={(e) => handleChange("originalPrice", e.target.value)}
-                className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                type="file"
+                accept="image/*"
+                onChange={handleImagePick}
+                className="text-xs text-ink/60 file:mr-3 file:rounded-full file:border-0 file:bg-forest-light file:px-4 file:py-2 file:text-xs file:font-semibold file:text-forest-dark hover:file:bg-forest/20"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-ink/60 mb-1.5">
-                Harga Diskon (Rp)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={form.discountPrice}
-                onChange={(e) => handleChange("discountPrice", e.target.value)}
-                className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
-              />
+
+            {/* Kolom kanan: form detail listing */}
+            <div className="bg-white rounded-card border border-line p-6 h-fit lg:sticky lg:top-6 space-y-5">
+              {/* Judul */}
+              <div>
+                <label className="block text-xs font-semibold text-ink/60 mb-1.5">
+                  Judul Listing
+                </label>
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => handleChange("title", e.target.value)}
+                  placeholder="mis. Nasi Kotak Sisa Katering"
+                  className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                />
+              </div>
+
+              {/* Kategori & Satuan */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-ink/60 mb-1.5">
+                    Kategori
+                  </label>
+                  <select
+                    value={form.category}
+                    onChange={(e) => handleChange("category", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink/60 mb-1.5">
+                    Satuan
+                  </label>
+                  <select
+                    value={form.unit}
+                    onChange={(e) => handleChange("unit", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                  >
+                    {UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Harga */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-ink/60 mb-1.5">
+                    Harga Asli (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.originalPrice}
+                    onChange={(e) => handleChange("originalPrice", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink/60 mb-1.5">
+                    Harga Diskon (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.discountPrice}
+                    onChange={(e) => handleChange("discountPrice", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                  />
+                </div>
+              </div>
+
+              {/* Jumlah tersisa */}
+              <div>
+                <label className="block text-xs font-semibold text-ink/60 mb-1.5">
+                  Jumlah Tersisa
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.quantityLeft}
+                  onChange={(e) => handleChange("quantityLeft", e.target.value)}
+                  className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                />
+              </div>
+
+              {/* Lokasi pickup */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-ink/60">
+                    Lokasi Pickup
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseMyLocation}
+                    disabled={locating}
+                    className="text-xs font-semibold text-forest hover:text-forest-dark disabled:opacity-50"
+                  >
+                    {locating ? "Mendeteksi..." : "📍 Gunakan lokasi saya sekarang"}
+                  </button>
+                </div>
+
+                <LocationPicker
+                  position={position ?? DEFAULT_CENTER}
+                  onChange={handleMapChange}
+                />
+                <p className="text-xs text-ink/40 mt-1.5">
+                  Klik atau geser pin di peta buat koreksi titik lokasi kalau
+                  kurang pas.
+                </p>
+
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setSaved(false);
+                  }}
+                  placeholder="Alamat lengkap (bisa diedit manual)"
+                  className="mt-3 w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
+                />
+
+                {locationError && (
+                  <p className="text-xs text-clay mt-1.5">{locationError}</p>
+                )}
+              </div>
+
+              <div className="dash-divider !border-line" />
+
+              <div className="flex items-center gap-3">
+                <a
+                  href="/Mitra/Dashboard"
+                  className="flex-1 text-center rounded-full border border-line text-ink text-sm font-semibold py-2.5 hover:bg-forest-light transition-colors"
+                >
+                  Batal
+                </a>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 rounded-full bg-forest text-white text-sm font-semibold py-2.5 hover:bg-forest-dark transition-colors disabled:opacity-60"
+                >
+                  {uploadingImage
+                    ? "Mengunggah foto..."
+                    : saving
+                    ? "Menyimpan..."
+                    : "Simpan Perubahan"}
+                </button>
+              </div>
             </div>
-          </div>
-
-          {/* Jumlah tersisa */}
-          <div>
-            <label className="block text-xs font-semibold text-ink/60 mb-1.5">
-              Jumlah Tersisa
-            </label>
-            <input
-              type="number"
-              min={0}
-              value={form.quantityLeft}
-              onChange={(e) => handleChange("quantityLeft", e.target.value)}
-              className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
-            />
-          </div>
-
-          {/* Lokasi pickup */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-ink/60">
-                Lokasi Pickup
-              </label>
-              <button
-                type="button"
-                onClick={handleUseMyLocation}
-                disabled={locating}
-                className="text-xs font-semibold text-forest hover:text-forest-dark disabled:opacity-50"
-              >
-                {locating ? "Mendeteksi..." : "📍 Gunakan lokasi saya sekarang"}
-              </button>
-            </div>
-
-            <LocationPicker
-              position={position ?? DEFAULT_CENTER}
-              onChange={handleMapChange}
-            />
-            <p className="text-xs text-ink/40 mt-1.5">
-              Klik atau geser pin di peta buat koreksi titik lokasi kalau kurang
-              pas.
-            </p>
-
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => {
-                setAddress(e.target.value);
-                setSaved(false);
-              }}
-              placeholder="Alamat lengkap (bisa diedit manual)"
-              className="mt-3 w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-forest/30"
-            />
-
-            {locationError && (
-              <p className="text-xs text-clay mt-1.5">{locationError}</p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <a
-              href="/Mitra/Dashboard"
-              className="flex-1 text-center rounded-full border border-line text-ink text-sm font-semibold py-2.5 hover:bg-forest-light transition-colors"
-            >
-              Batal
-            </a>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 rounded-full bg-forest text-white text-sm font-semibold py-2.5 hover:bg-forest-dark transition-colors disabled:opacity-60"
-            >
-              {uploadingImage
-                ? "Mengunggah foto..."
-                : saving
-                ? "Menyimpan..."
-                : "Simpan Perubahan"}
-            </button>
           </div>
         </form>
       </div>
