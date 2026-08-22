@@ -295,6 +295,12 @@ export default function EditListingPage() {
       setForm((prev) => ({ ...prev, imageUrl }));
       setImageFile(null);
       setSaved(true);
+
+      // Kasih jeda sebentar biar pesan "berhasil disimpan" sempat kebaca,
+      // baru redirect balik ke dashboard mitra.
+      setTimeout(() => {
+        router.push("/Mitra/Dashboard");
+      }, 1000);
     } catch (err: any) {
       console.error("Gagal menyimpan listing:", err);
       setFormError(err?.message || "Gagal menyimpan perubahan.");
